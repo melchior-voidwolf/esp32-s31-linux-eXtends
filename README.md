@@ -120,16 +120,81 @@ Notable intentional differences:
   container). The upstream macOS/container flow is still present but not
   exercised by this fork.
 
-## Building
+## Building (Korvo-1, on a Linux x64 host)
+
+Tested on Ubuntu 24.04, native — no container, no cross-toolchain to
+install by hand (Buildroot builds its own).
+
+**Host packages:**
 
 ```sh
-# full reproducible image (Linux x64 server, ~25 min cold, 96 jobs)
-scripts/soft-icewm-native-build.sh
-
-# output
-build/artifacts/sdcard-soft-icewm.img          # write to a microSD card
-sudo scripts/flash-sd-linux.sh /dev/sdX build/artifacts/sdcard-soft-icewm.img
+sudo apt install build-essential bc bison flex gettext rsync unzip cpio \
+    patch perl tar python3 file libssl-dev wget git
 ```
+
+**Build** (first run downloads ~1 GB of sources into `dl/`; on a
+metered or censored connection budget for that. Cold build ≈ 25 min on
+96 jobs, proportionally longer on smaller machines):
+
+```sh
+scripts/soft-icewm-native-build.sh
+# → build/artifacts/sdcard-soft-icewm.img  (644 MiB, SHA-256 printed)
+```
+
+The script configures Buildroot from `br2-external/configs/korvo1_defconfig`,
+verifies the ABI and package set (soft-float ilp32, X11, IceWM, the S31
+Xorg driver), builds everything, then re-verifies the produced target
+root (Xorg/IceWM/touch/codec binaries present, no `wpa_supplicant.conf`,
+LED default-off) before exporting.
+
+**Flash the card** (any 8 GB+ card; whole-disk, erase-all):
+
+```sh
+sudo scripts/flash-sd-linux.sh /dev/sdX build/artifacts/sdcard-soft-icewm.img
+# or dd the image and run the SHA-256 check yourself
+```
+
+**First-time SPI flash.** The card carries the kernel; the SPI flash
+carries the second-stage loader, OpenSBI and the Wi-Fi/BT radio firmware.
+A board that has never been flashed needs those once:
+
+- Easiest: flash the `flash.bin` from the
+  [upstream releases](https://github.com/annoyedmilk/esp32-s31-linux/releases)
+  (`esptool --chip esp32s31 -p PORT -b 921600 write-flash 0x0 flash.bin`).
+  The upstream loader boots `IMAGE.BIN` from card p1, which is exactly how
+  this fork is used.
+- Or build it yourself: `make bootloader` (needs ESP-IDF v6.1 with the
+  ESP-Hosted patches; see
+  [docs/README-upstream.md](docs/README-upstream.md), Host requirements).
+
+**Daily updates are card-only**: write the new image, done. The loader
+reads `IMAGE.BIN` from card p1 in preference to the flash kernel.
+
+**Verify after boot** (serial console 115200 baud, root, no password):
+
+```sh
+fastfetch        # OS/Kernel/Memory/Swap lines — Swap shows zram at work
+fputest          # FPUTEST_PASS (the F-only FPU patch)
+startde          # already ran at boot; the LCD shows the IceWM desktop
+```
+
+**Check you are running the card kernel**: `dmesg | grep version` — the
+build host and date must match your build. If the loader's SD init times
+out (rare, seen once in a day of boots) it falls back to the flash kernel
+**silently**: the login prompt looks identical and `fputest` will fail
+with Illegal instruction. Power-cycle and retry; a loader reflash makes
+the fallback disappear.
+
+### Known sharp edges
+
+- Some USB devices wedge the DWC2 host controller in an interrupt-retry
+  storm (~8k IRQ/s, system frozen). One specific device is confirmed bad;
+  leave USB empty unless you need the keyboard, and watch
+  `grep dwc2 /proc/interrupts` when you plug something.
+- First Buildroot download can be slow; the `dl/` cache makes later
+  builds incremental.
+- If you re-run the build as a different user after a container/root run,
+  `chown -R` your `dl/` — Buildroot fails with a bare Permission denied.
 
 Serial console 115200 baud, root, no password on the console; SSH is
 key-only. `docs/README-upstream.md` documents the loader, the memory map,

@@ -117,15 +117,72 @@ X11,也没有 FPU 补丁——这正是这个 fork 存在的意义。想要上�
 - **宿主构建在 Linux x64 原生验证**(Ubuntu 24.04);上游的
   macOS/container 流程代码还在,但这个 fork 没练过
 
-## 构建与烧录
+## 构建与烧录(Korvo-1,Linux x64 宿主)
+
+在 Ubuntu 24.04 上原生验证过——不用容器,也不用自己装交叉工具链
+(Buildroot 自带自编)。
+
+**宿主依赖:**
 
 ```sh
-# 一条命令出权威镜像(Linux x64,冷缓存约 25 分钟,96 核)
-scripts/soft-icewm-native-build.sh
-
-# 产物写卡(SHA-256 回读校验)
-sudo scripts/flash-sd-linux.sh /dev/sdX build/artifacts/sdcard-soft-icewm.img
+sudo apt install build-essential bc bison flex gettext rsync unzip cpio \
+    patch perl tar python3 file libssl-dev wget git
 ```
+
+**构建**(首次运行会往 `dl/` 下载约 1 GB 源码,网络慢的先有个预期;
+冷构建在 96 核上约 25 分钟,核少按比例加时):
+
+```sh
+scripts/soft-icewm-native-build.sh
+# → build/artifacts/sdcard-soft-icewm.img  (644 MiB,打印 SHA-256)
+```
+
+脚本会从 `br2-external/configs/korvo1_defconfig` 配置 Buildroot,校验
+ABI 和包集(soft-float ilp32、X11、IceWM、S31 Xorg 驱动),全量编译,
+然后在导出**之前**反向校验产出的 root(Xorg/IceWM/触摸/编解码二进制
+在位、无 `wpa_supplicant.conf`、LED 默认关)——哪一环不对当场死。
+
+**写卡**(8 GB 以上;整盘擦除):
+
+```sh
+sudo scripts/flash-sd-linux.sh /dev/sdX build/artifacts/sdcard-soft-icewm.img
+# 或者自己 dd,自己跑 SHA-256 回读校验
+```
+
+**首次烧 SPI flash。** 卡里带内核;SPI flash 里是二级 loader、OpenSBI
+和 Wi-Fi/BT radio 固件。从没刷过的板子需要刷一次:
+
+- 最省事:刷[上游 release](https://github.com/annoyedmilk/esp32-s31-linux/releases)
+  的 `flash.bin`(`esptool --chip esp32s31 -p PORT -b 921600 write-flash 0x0 flash.bin`)。
+  上游 loader 优先从卡 p1 引导 `IMAGE.BIN`,正是这个 fork 的用法。
+- 或者自己编:`make bootloader`(要 ESP-IDF v6.1 + ESP-Hosted 补丁,
+  见 [docs/README-upstream.md](docs/README-upstream.md) 的 Host
+  requirements)。
+
+**日常更新只动卡**:写新镜像,完事。loader 优先读卡 p1 上的
+`IMAGE.BIN`,flash 内核根本轮不到。
+
+**开机验证**(串口 115200,root 免密):
+
+```sh
+fastfetch        # 看 OS/Kernel/Memory/Swap——Swap 那行是 zram 在干活
+fputest          # FPUTEST_PASS(F-only FPU 补丁)
+startde          # 开机已经跑过;LCD 上就是 IceWM 桌面
+```
+
+**确认跑的是卡上的内核**:`dmesg | grep version`——构建主机和日期
+必须对上你的构建。loader 的 SD 初始化偶发超时(实测一天里见过一次)
+会**静默**回落 flash 内核:登录提示一模一样,但 `fputest` 会 Illegal
+instruction。断电重上就好;重刷 loader 之后这个回落就不存在了。
+
+### 已知的坑
+
+- 某些 USB 设备会把 DWC2 host 控制器搞进中断重试风暴(约 8k IRQ/s,
+  整机冻住)。已确认一个特定设备中招;不需要键盘就别插 USB,插东西时
+  盯着 `grep dwc2 /proc/interrupts`。
+- Buildroot 首次下载可能很慢;`dl/` 缓存能让后续构建增量。
+- 容器/root 跑过一次构建后换用户重跑,记得 `chown -R` 你的 `dl/`——
+  Buildroot 挂的时候只报一句光秃秃的 Permission denied。
 
 串口 115200,控制台 root 免密,SSH 只收 key。加载器、内存布局、
 flash 分区、内核补丁集这些没变的硬知识,上游 README 写得怪好:
