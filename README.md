@@ -197,6 +197,10 @@ the fallback disappear.
   `chown -R` your `dl/` — Buildroot fails with a bare Permission denied.
 
 Serial console 115200 baud, root, no password on the console; SSH is
+\nAll the pitfalls, fixes, techniques and design decisions we hit are
+written up in [docs/notes.md](docs/notes.md) (Chinese:
+[docs/notes-cn.md](docs/notes-cn.md)) — the Wi-Fi storm, the kswapd
+livelock, the DWC2 device storm, the EXA decisions, the lot.
 key-only. `docs/README-upstream.md` documents the loader, the memory map,
 the flash layout and the kernel patch set in depth — all of that still
 applies.
