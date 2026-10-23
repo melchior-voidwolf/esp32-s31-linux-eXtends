@@ -188,7 +188,7 @@ instruction。断电重上就好;重刷 loader 之后这个回落就不存在了
 flash 分区、内核补丁集这些没变的硬知识,上游 README 写得怪好:
 [docs/README-upstream.md](docs/README-upstream.md)。
 
-\n把这一路撞上的坑、修复、技巧、设计决策,全写在
+把这一路撞上的坑、修复、技巧、设计决策,全写在
 [docs/notes-cn.md](docs/notes-cn.md)(英文:[docs/notes.md](docs/notes.md))——
 Wi-Fi 风暴、kswapd 活锁、DWC2 设备风暴、EXA 的取舍,都在里头。
 ## 路线图
