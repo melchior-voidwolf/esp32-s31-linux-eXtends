@@ -24,6 +24,11 @@ watches it:
 
 *(Moiré included at no extra charge.)*
 
+`fastfetch` on the merged v0.7.1 base, numbers straight from the board
+(note the swap line: 9 MiB of the desktop lives compressed in zram):
+
+![fastfetch on the ESP32-S31-Korvo-1](docs/fastfetch.svg)
+
 ## What this fork adds
 
 Everything below is on top of the upstream `v0.5.0`-era base (`3dad844`).
@@ -95,13 +100,14 @@ headless server made every failure mode visible:
 
 ## Relationship to upstream
 
-This fork diverged before upstream's `v0.6.0`; upstream has since added a
-second board (Function-CoreBoard-1 with Ethernet), a native I2C master
-driver, a tmux-based console desktop, and a release process — see
-[their README](docs/README-upstream.md). None of that is merged back yet;
-it is on the roadmap. Conversely, upstream has no X11 and no FPU support.
-For the upstream feature set as published, use
-[upstream releases](https://github.com/annoyedmilk/esp32-s31-linux/releases).
+This fork diverged before upstream's `v0.6.0` and **merged upstream
+v0.7.1** (2026-10-23): the Function-CoreBoard-1 with Ethernet, the native
+I2C master driver (the GT1151 touch now runs on hardware I2C instead of
+i2c-gpio bitbang), the pin-controller rework, the tmux console desktop
+(which coexists with ours: console side theirs, graphical side ours), and
+the kernel-source-copy integration. See
+[their README](docs/README-upstream.md) for the core-port story. Upstream
+still has no X11 and no FPU support — that is what this fork is for.
 
 Notable intentional differences:
 
@@ -132,8 +138,11 @@ applies.
 
 ## Roadmap
 
-- [ ] Merge upstream v0.7.x (native I2C, the new board, the tmux desktop;
-      moving the touch panel off i2c-gpio bitbang frees a slice of CPU)
+- [x] Merge upstream v0.7.1 (done 2026-10-23; the touch panel now runs on
+      hardware I2C, freeing the bitbang CPU slice)
+- [ ] FPU on the merged kernel: the F-only patch needs a rework — on the
+      upstream base the kernel reports `rv32imac` again (the resolve path
+      drops `f` somewhere new); under investigation
 - [ ] ilp32f (hardware-F ABI) rebuild; the survey and smoke test are done
 - [ ] The dwc2 split-error retry storm on certain USB devices (patch 0014
       needs a companion)

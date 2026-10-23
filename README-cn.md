@@ -14,6 +14,11 @@
 
 ![实拍](docs/desktop-photo.jpg)
 
+**fastfetch**(合并上游 v0.7.1 基座后的真机数据,注意 Swap 那行——
+桌面上 9 MiB 都压在 zram 里,得劲!):
+
+![fastfetch](docs/fastfetch.svg)
+
 English: [README.md](README.md)。
 
 ## 俺们弄啥嘞
@@ -93,11 +98,13 @@ Linux 只分到 16 MiB PSRAM 里的 10.6 MiB(内核、OpenSBI、framebuffer
 
 ## 与上游的关系
 
-本 fork 分叉于上游 `v0.6.0` 之前。上游后来单独演进:加了第二块板
-(Function-CoreBoard-1,带以太网)、原生 I2C master 驱动(GT1151
-触摸也换成了硬件 I2C)、tmux 控制台桌面,还有一整套 release 流程——
-见 [docs/README-upstream.md](docs/README-upstream.md)。这些还没合并
-回来,在路线图上。反过来,上游没有 X11,也没有 FPU 补丁。想要上游
+本 fork 分叉于上游 `v0.6.0` 之前,**2026-10-23 已合并上游 v0.7.1**:
+第二块板(Function-CoreBoard-1,带以太网)、原生 I2C master 驱动
+(GT1151 触摸从此走硬件 I2C,bitbang 轮询退休)、pin controller 重构、
+tmux 控制台桌面(与俺们的 X 桌面共存:控制台归上游,图形归俺们)、
+内核源码拷贝式集成,全进来了。核心移植的故事见
+[docs/README-upstream.md](docs/README-upstream.md)。但上游至今没有
+X11,也没有 FPU 补丁——这正是这个 fork 存在的意义。想要上游原味
 全家桶,直接用
 [上游 release](https://github.com/annoyedmilk/esp32-s31-linux/releases),
 中!
@@ -126,8 +133,10 @@ flash 分区、内核补丁集这些没变的硬知识,上游 README 写得怪�
 
 ## 路线图
 
-- [ ] 合并上游 v0.7.x(原生 I2C、新板子、tmux 桌面;触摸换硬件 I2C
-      后,bitbang 轮询那点 CPU 开销也能省下)
+- [x] 合并上游 v0.7.1(2026-10-23 完成;触摸上了硬件 I2C,bitbang 那
+      点 CPU 开销省下了)
+- [ ] 合并版内核上的浮点:0017 patch 得重活——上游基座上内核又报
+      `rv32imac`(resolve 管线把 `f` 在新地方丢了),挖着呢
 - [ ] ilp32f(硬件 F ABI)全量重建,调研和烟雾测试已过
 - [ ] dwc2 对特定 USB 设备的 split 错误重试风暴(0014 之外还得再来
       一剂)
