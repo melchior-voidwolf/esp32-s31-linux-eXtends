@@ -85,11 +85,11 @@ Linux 只分到 16 MiB PSRAM 里的 10.6 MiB(内核、OpenSBI、framebuffer
   target 边界,被 buildroot 扫描器当场拿下。
 - `jpegdec`/`jpegenc` 硬编解码,桌面礼仪版(保存/恢复 PPA staging
   寄存器,不跟 X 抢屏)。
-- `fputest-abi`、`s31view`、`tools/cam-shot.sh`(固定对焦拍板,
-  时间戳命名)、`tools/flash-sd-linux.sh`(上游烧卡脚本是 macOS
+- `fputest-abi`、`s31view`、`scripts/cam-shot.sh`(固定对焦拍板,
+  时间戳命名)、`scripts/flash-sd-linux.sh`(上游烧卡脚本是 macOS
   专用,这里补了 Linux 版,SHA-256 回读校验)。
 - **纯原生构建**:x86 Linux 服务器上不套 Docker 直编
-  (`tools/soft-icewm-native-build.sh`,96 核冷缓存约 25 分钟)。
+  (`scripts/soft-icewm-native-build.sh`,96 核冷缓存约 25 分钟)。
 
 ## 与上游的关系
 
@@ -114,10 +114,10 @@ Linux 只分到 16 MiB PSRAM 里的 10.6 MiB(内核、OpenSBI、framebuffer
 
 ```sh
 # 一条命令出权威镜像(Linux x64,冷缓存约 25 分钟,96 核)
-tools/soft-icewm-native-build.sh
+scripts/soft-icewm-native-build.sh
 
 # 产物写卡(SHA-256 回读校验)
-tools/flash-sd-linux.sh /dev/sdX build/korvo1/buildroot/sdcard-soft-icewm.img
+sudo scripts/flash-sd-linux.sh /dev/sdX build/artifacts/sdcard-soft-icewm.img
 ```
 
 串口 115200,控制台 root 免密,SSH 只收 key。加载器、内存布局、

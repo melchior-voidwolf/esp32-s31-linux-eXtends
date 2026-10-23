@@ -87,11 +87,11 @@ headless server made every failure mode visible:
   out-of-target pollution (rightly rejected by the buildroot scanner).
 - Hardware JPEG codecs with desktop manners (`jpegdec`/`jpegenc` save and
   restore the PPA staging registers, and do not fight X for the screen).
-- `fputest-abi`, `s31view`, `tools/cam-shot.sh` (timestamped webcam shots
-  of the board with a fixed-focus profile), `tools/flash-sd-linux.sh` (the
+- `fputest-abi`, `s31view`, `scripts/cam-shot.sh` (timestamped webcam shots
+  of the board with a fixed-focus profile), `scripts/flash-sd-linux.sh` (the
   macOS-only flash scripts made portable, with SHA-256 readback verify),
   and a fully native non-Docker build path for x86 Linux servers
-  (`tools/soft-icewm-native-build.sh`).
+  (`scripts/soft-icewm-native-build.sh`).
 
 ## Relationship to upstream
 
@@ -118,11 +118,11 @@ Notable intentional differences:
 
 ```sh
 # full reproducible image (Linux x64 server, ~25 min cold, 96 jobs)
-tools/soft-icewm-native-build.sh
+scripts/soft-icewm-native-build.sh
 
 # output
-build/korvo1/buildroot/sdcard-soft-icewm.img   # write to a microSD card
-tools/flash-sd-linux.sh /dev/sdX build/korvo1/buildroot/sdcard-soft-icewm.img
+build/artifacts/sdcard-soft-icewm.img          # write to a microSD card
+sudo scripts/flash-sd-linux.sh /dev/sdX build/artifacts/sdcard-soft-icewm.img
 ```
 
 Serial console 115200 baud, root, no password on the console; SSH is
