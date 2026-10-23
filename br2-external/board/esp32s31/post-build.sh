@@ -39,7 +39,7 @@ if [ -f "$1/etc/init.d/S30dbus-daemon" ]; then
 fi
 
 # eudev's stock rules name groups that nothing creates ("specified group
-# 'input'/'sgx'/'kvm' unknown at boot).  Add them; post-build runs once per
+# 'input'/'sgx'/'kvm' unknown at boot").  Add them; post-build runs once per
 # build, so stay idempotent or incremental rebuilds duplicate the lines and
 # mkusers chokes on them.
 grep -q '^input:' "$1/etc/group" || echo "input:x:991:" >> "$1/etc/group"
@@ -59,4 +59,10 @@ rm -f "$1/etc/wpa_supplicant.conf"
 # than bash.  The interactive shell of root is bash, where the image has it.
 if [ -x "$1/bin/bash" ]; then
 	sed -i '/^root:/s,[^:]*$,/bin/bash,' "$1/etc/passwd"
+fi
+
+# The flash root of the module has no room for the Lua compiler.  lua
+# compiles each script itself.
+if [ -x "$1/sbin/overlay-init" ]; then
+	rm -f "$1/usr/bin/luac"
 fi

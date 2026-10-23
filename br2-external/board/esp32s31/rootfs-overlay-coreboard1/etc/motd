@@ -1,0 +1,17 @@
+
+Linux on the ESP32-S31-Function-CoreBoard-1: RV32 at 320 MHz, 16 MiB PSRAM.
+
+Ethernet  eth0 gets an address with DHCP at boot: ip addr show eth0
+Wi-Fi     wpa_passphrase "<ssid>" "<passphrase>" >> /etc/wpa_supplicant.conf
+          /etc/init.d/S40wifi restart
+          iw dev wlan0 link; iw dev wlan0 scan | grep SSID
+Bluetooth bluetoothctl, then: scan le, scan bredr, devices
+System    htop, free, df -h, ncdu, dmesg, tmux
+Time      UTC; local zone: ln -sf /usr/share/zoneinfo/Europe/Zurich /etc/localtime
+Network   ssh, scp, curl, links, iperf3, tcpdump
+Files     nnn, tree; /mnt/usb is the FAT partition of the USB stick
+Code      micropython, lua, vim, nano, sqlite3, bc, gdbserver, strace
+GPIO      gpiodetect, gpioinfo, gpioget, gpioset
+LED       echo 0 32 0 > /sys/class/leds/rgb:status/multi_intensity
+          echo 255 > /sys/class/leds/rgb:status/brightness
+Examples  ls /usr/share/examples

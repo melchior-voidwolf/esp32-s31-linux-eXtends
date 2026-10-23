@@ -1,10 +1,12 @@
 SHELL := /bin/bash
 
-# The board to build for: korvo1 (ESP32-S31-Korvo-1: LCD, microSD, USB, LED)
-# or esp32s31 (the ESP32-S31-WROOM-3-N16R16V alone: UART0, root in the flash).
-BOARD ?= korvo1
-ifeq ($(filter $(BOARD),korvo1 esp32s31),)
-$(error BOARD must be korvo1 or esp32s31, not "$(BOARD)")
+# The board to build for: esp32s31 (the ESP32-S31-WROOM-3-N16R16V alone:
+# UART0, root in the flash), coreboard1 (ESP32-S31-Function-CoreBoard-1:
+# Ethernet, USB, LED, root on a USB stick) or korvo1 (ESP32-S31-Korvo-1: LCD,
+# microSD, USB, LED, root on the card).
+BOARD ?= esp32s31
+ifeq ($(filter $(BOARD),esp32s31 coreboard1 korvo1),)
+$(error BOARD must be esp32s31, coreboard1 or korvo1, not "$(BOARD)")
 endif
 
 BUILD_DIR := build/$(BOARD)
@@ -86,8 +88,8 @@ BR_TOOLS = "$(CONTAINER)" run --rm --uid $(shell id -u) --gid $(shell id -g) \
 PARTITIONS := bootloader/partitions-$(BOARD).csv
 part_field = $(shell awk -F'[ ,]+' '$$1 == "$(1)" { print $$$(2) }' $(PARTITIONS))
 
-# The squashfs root in the flash, on the module alone.  The Korvo-1 has its
-# root on the card and no rootfs partition.
+# The squashfs root in the flash, on the module alone.  The Korvo-1 and the
+# Function-CoreBoard-1 have their root on a disk and no rootfs partition.
 ROOT_OFFSET := $(call part_field,rootfs,4)
 ROOT_SIZE := $(call part_field,rootfs,5)
 SD_DISK ?=
@@ -110,12 +112,13 @@ PARTITION_TABLE_OFFSET := 0x8000
 APP_OFFSET := $(call part_field,factory,4)
 OPENSBI_OFFSET := $(call part_field,opensbi,4)
 LINUX_OFFSET := $(call part_field,linux,4)
+LINUX_SIZE := $(call part_field,linux,5)
 # The size manifest is at the end of the kernel partition.
-LINUX_SIZE_OFFSET := $(shell printf '0x%x' $$(( $(LINUX_OFFSET) + $(call part_field,linux,5) - 12 )))
+LINUX_SIZE_OFFSET := $(shell printf '0x%x' $$(( $(LINUX_OFFSET) + $(LINUX_SIZE) - 12 )))
 
 .DEFAULT_GOAL := help
 
-.PHONY: help check ports build bootloader opensbi kernel kernel-patches defconfigs \
+.PHONY: help check ports build bootloader opensbi kernel defconfigs \
 	kernel-check kernel-clean kernel-vmlinux kernel-menuconfig \
 	kernel-saveconfig \
 	container-image \
@@ -143,7 +146,6 @@ help:
 		'Kernel, which Buildroot builds from a stock release:' \
 		'' \
 		'  make kernel                        rebuild just the kernel' \
-		'  make kernel-patches                regenerate linux/patches from linux/' \
 		'  make defconfigs                    regenerate br2-external/configs from the fragments' \
 		'  make kernel-check                  dry-run the series on a pristine tree' \
 		'  make kernel-clean                  re-extract the kernel after a patch change' \
@@ -151,11 +153,12 @@ help:
 		'  make kernel-menuconfig             configure the kernel' \
 		'  make kernel-saveconfig             write the configuration back' \
 		'' \
-		'SD card, once a card is in the Mac (see: diskutil list external):' \
+		'Disk (the card or the USB stick), once it is in the Mac' \
+		'(see: diskutil list external):' \
 		'' \
-		'  make sdcard                        card image for a fresh card' \
-		'  make sdpart  SD_DISK=/dev/diskN   lay out a large card (ERASES it)' \
-		'  make sdwrite SD_DISK=/dev/diskN   write the whole card image (ERASES it)' \
+		'  make sdcard                        disk image for a fresh disk' \
+		'  make sdpart  SD_DISK=/dev/diskN   lay out a large disk (ERASES it)' \
+		'  make sdwrite SD_DISK=/dev/diskN   write the whole disk image (ERASES it)' \
 		'  make sdroot  SD_DISK=/dev/diskN   rewrite only the root partition' \
 		'' \
 		'Buildroot host container (it cannot build on macOS):' \
@@ -170,9 +173,10 @@ help:
 		'board before monitoring when SERIAL_PORT cannot (BAUD, BOOT_TIMEOUT' \
 		'tune the monitor).' \
 		'' \
-		'BOARD selects the board, for each target: korvo1 (the default) or' \
-		'esp32s31.  The output of a board goes to build/BOARD.  On korvo1 the' \
-		'rootfs is on the SD card.  On esp32s31, it is in the flash.'
+		'BOARD selects the board, for each target: esp32s31 (the default),' \
+		'coreboard1 or korvo1.  The output of a board goes to build/BOARD.' \
+		'On esp32s31 the rootfs is in the flash.  On korvo1 it is on the SD' \
+		'card, on coreboard1 on a USB stick.'
 
 check:
 	@test "$$(uname -s)" = Darwin || { echo 'this build is supported on macOS only'; exit 1; }
@@ -238,21 +242,16 @@ opensbi:
 	@cp "$(OPENSBI_OUT)/platform/esp32s31/firmware/fw_jump.elf" "$(BUILD_DIR)/opensbi.elf"
 	@cp "$(OPENSBI_OUT)/platform/esp32s31/firmware/fw_jump.bin" "$(BUILD_DIR)/opensbi.bin"
 
-# The defconfigs are made from a common fragment and one for each board.
+# The defconfigs are made from the common fragment, the root fragment and
+# the fragment of each board.
 defconfigs:
 	@$(BR_TOOLS) sh -c 'cd /work && scripts/mkdefconfigs.sh'
-
-# All files under linux/ are new to the kernel, so a generated patch (0000)
-# adds them.  The other patches change existing files.  Each kernel build
-# makes 0000 again, so an edit of 0000 itself is always lost.
-kernel-patches:
-	@"$(PYTHON)" scripts/mkkernelpatches.py
 
 # Apply the series in order to a clean extract of the kernel release, in the
 # container at zero fuzz, as Buildroot does.  The macOS patch accepts old
 # context that GNU patch rejects.  A kernel version change must also pass
 # this test.
-kernel-check: kernel-patches br-volume
+kernel-check: br-volume
 	@$(BR_RUN) sh -c 'set -e; \
 		cd /work/$(BR_DIR); \
 		test -f /br/dl/linux/linux-$(LINUX_VERSION).tar.xz || { \
@@ -268,18 +267,18 @@ kernel-check: kernel-patches br-volume
 				then echo applies; else echo FAILS; fail=1; fi; \
 		done; rm -rf /br/check; exit $$fail'
 
-# Buildroot applies the patches only when it extracts the kernel, and it
-# ignores changes to the custom config and to the ESP-Hosted sources.  Thus
-# keep a hash of all three in the volume.  When the hash changes, delete the
+# Buildroot copies linux/ and applies the patches only when it extracts the
+# kernel, and it ignores changes to the custom config and to the ESP-Hosted
+# sources.  Thus keep a hash of all of them in the volume.  When the hash changes, delete the
 # extracted kernel, headers and ESP-Hosted sources, so Buildroot extracts,
 # patches and configures them again.  Runs in the container, in the Buildroot
 # directory.
-KERNEL_SYNC = sum=$$(cat /work/linux/patches/*.patch \
-		/work/br2-external/board/esp32s31/linux* \
+KERNEL_SYNC = sum=$$({ find /work/linux -type f ! -name ._\* | sort | xargs cat; \
+		cat /work/br2-external/board/esp32s31/linux* \
 		/work/br2-external/configs/$(BR_DEFCONFIG) \
 		/work/shared/*.h /work/br2-external/package/esp-hosted-linux/* \
 		/work/external/esp-hosted-linux/host/*.c \
-		/work/external/esp-hosted-linux/host/include/*.h | \
+		/work/external/esp-hosted-linux/host/include/*.h; } | \
 		sha256sum | cut -d" " -f1); \
 	stamp=$(BR_O)/.esp32s31-kernel-inputs; \
 	if test -f $(BR_O)/.config && \
@@ -290,13 +289,14 @@ KERNEL_SYNC = sum=$$(cat /work/linux/patches/*.patch \
 	fi; \
 	mkdir -p $(BR_O); echo "$$sum" > $$stamp
 
-kernel: kernel-patches br-volume
+kernel: br-volume
 	@$(BR_RUN) sh -c 'set -e; cd /work/$(BR_DIR); $(KERNEL_SYNC); \
 		$(BR_MAKE) linux-rebuild all'
 	@$(MAKE) --no-print-directory br-artifacts
 
 # Delete the extracted kernel and headers by hand.  "make kernel" and
-# "make rootfs" do this themselves when the patches or the config change.
+# "make rootfs" do this themselves when linux/, the config or the
+# ESP-Hosted sources change.
 kernel-clean: br-volume
 	@$(BR_RUN) sh -c 'cd /work/$(BR_DIR); $(BR_MAKE) linux-dirclean linux-headers-dirclean'
 
@@ -326,7 +326,7 @@ br-volume:
 			chown -R $(shell id -u):$(shell id -g) /br; }
 
 # The defconfig in git is the reference.  Each build applies it again.
-rootfs: kernel-patches br-volume
+rootfs: br-volume
 	@$(BR_RUN) sh -c 'set -e; \
 		cd /work/$(BR_DIR); \
 		$(BR_MAKE) $(BR_DEFCONFIG); \
@@ -336,10 +336,12 @@ rootfs: kernel-patches br-volume
 
 # Copy the kernel and its manifest from the volume for flashing, next to the
 # loader and OpenSBI binaries: also the squashfs root of a board without a
-# card, and the card images of a board with a card.
+# disk, and the disk images of a board with a disk.
 br-artifacts:
 	@$(BR_RUN) sh -c 'set -e; \
 		mkdir -p /work/$(BR_OUT) /work/$(BUILD_DIR); \
+		test $$(wc -c < $(BR_O)/images/Image) -le $$(( $(LINUX_SIZE) - 12 )) || \
+			{ echo "Image and its manifest are larger than the $(LINUX_SIZE) partition"; exit 1; }; \
 		cp $(BR_O)/images/Image $(BR_O)/images/linux.size /work/$(BUILD_DIR)/; \
 		if test -f $(BR_O)/images/rootfs.squashfs; then \
 			test $$(wc -c < $(BR_O)/images/rootfs.squashfs) -le $$(( $(ROOT_SIZE) )) || \
@@ -366,8 +368,8 @@ SD_CONFIRM = @read -r -p 'Type $(1) to continue: ' reply; \
 	test "$$reply" = $(1) || { echo aborted; exit 1; }
 SD_SHOW = @diskutil info "$(SD_DISK)" | grep -E 'Device Node|Media Name|Disk Size|Removable Media'
 
-# Partition a large card: a large FAT partition for the Mac and a small ext4
-# root.  Use this and not sdwrite when the card is larger than the image.
+# Partition a large disk: a large FAT partition for the Mac and a small ext4
+# root.  Use this and not sdwrite when the disk is larger than the image.
 # fsck.fat on the board needs approximately 8 bytes for each cluster, so p1
 # gets 64 KiB clusters (128 sectors).  FAT32 then needs 4 GiB or more.
 sdpart:
@@ -377,23 +379,25 @@ sdpart:
 	$(call SD_CONFIRM,ERASE)
 	@diskutil unmountDisk "$(SD_DISK)"
 	@diskutil partitionDisk "$(SD_DISK)" MBR \
-		"MS-DOS FAT32" KORVO_SD $(SD_DATA_SIZE) "MS-DOS FAT32" ROOTFS R \
+		"MS-DOS FAT32" ESP32S31 $(SD_DATA_SIZE) "MS-DOS FAT32" ROOTFS R \
 		"MS-DOS FAT32" SWAP 64M
 	@diskutil unmountDisk "$(SD_DISK)"
-	@sudo newfs_msdos -F 32 -c 128 -v KORVO_SD "$(SD_RAW)s1"
+	@sudo newfs_msdos -F 32 -c 128 -v ESP32S31 "$(SD_RAW)s1"
 # The kernel ignores the type byte of p2.  With 0x83, macOS does not try to
-# mount the ext4 partition as FAT at each insertion.  S05swap uses p3 only
-# with 0x82.
+# mount the ext4 partition as FAT at each insertion.  S05swap.sh uses p3 only
+# with 0x82.  The disk signature of genimage.cfg (0x45533331, little endian)
+# lets the Function-CoreBoard-1 kernel find its root stick.
 	@sudo sh -c 'dd if="$(SD_RAW)" of="$(BUILD_DIR)/mbr.bin" bs=512 count=1 && \
+		printf "\\x31\\x33\\x53\\x45" | dd of="$(BUILD_DIR)/mbr.bin" bs=1 seek=440 conv=notrunc && \
 		printf "\\x83" | dd of="$(BUILD_DIR)/mbr.bin" bs=1 seek=466 conv=notrunc && \
 		printf "\\x82" | dd of="$(BUILD_DIR)/mbr.bin" bs=1 seek=482 conv=notrunc && \
 		dd if="$(BUILD_DIR)/mbr.bin" of="$(SD_RAW)" bs=512 count=1' \
-		|| echo 'warning: type bytes unchanged; the board boots without card swap'
+		|| echo 'warning: MBR unchanged; no disk swap, and the CoreBoard-1 does not boot'
 	@rm -f "$(BUILD_DIR)/mbr.bin"
 	@diskutil list "$(SD_DISK)"
 	@echo 'now: make sdroot SD_DISK=$(SD_DISK)'
 
-# Erases the card.  On a large card, the space after p2 is not used.
+# Erases the disk.  On a large disk, the space after p3 is not used.
 sdwrite:
 	$(SD_DISK_REQUIRED)
 	@test -f "$(BR_OUT)/sdcard.img" || { echo 'no $(BR_OUT)/sdcard.img; run make sdcard'; exit 1; }

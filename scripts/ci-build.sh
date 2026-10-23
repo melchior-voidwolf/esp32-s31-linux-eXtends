@@ -4,17 +4,17 @@
 # the same on macOS, where Buildroot runs in a container.  Here Buildroot
 # runs directly.
 #
-#   BOARD=korvo1 scripts/ci-build.sh      (korvo1 or esp32s31)
+#   BOARD=esp32s31 scripts/ci-build.sh    (esp32s31, coreboard1 or korvo1)
 #
 # Needs: ESP-IDF at $IDF_PATH (the commit in bootloader/esp-idf.version and
 # the patch commit of scripts/patch-esp-idf.sh), with its tools installed,
 # and the Buildroot host packages.
-# Output: build/BOARD/ with the flash images, and for korvo1
-# build/korvo1/buildroot/sdcard.img.
+# Output: build/BOARD/ with the flash images, and for korvo1 and coreboard1
+# build/BOARD/buildroot/sdcard.img.
 set -eu
 
 cd "$(dirname "$0")/.."
-: "${BOARD:=korvo1}"
+: "${BOARD:=esp32s31}"
 : "${IDF_PATH:=$HOME/esp/esp-idf}"
 : "${BR_OUTPUT:=$PWD/build/br-output-$BOARD}"
 : "${BR_DL_DIR:=$PWD/build/br-dl}"
@@ -28,7 +28,6 @@ if [ "$want" != "$have" ]; then
 fi
 
 scripts/mkdefconfigs.sh --check
-make kernel-patches
 make bootloader BOARD="$BOARD"
 make opensbi BOARD="$BOARD"
 
@@ -39,6 +38,9 @@ $br
 
 out=build/$BOARD
 mkdir -p "$out/buildroot"
+# The 12-byte manifest is at the end of the linux partition, after the Image.
+size=$(awk -F'[ ,]+' '$1 == "linux" { print $5 }' "bootloader/partitions-$BOARD.csv")
+test "$(wc -c < "$BR_OUTPUT/images/Image")" -le $((size - 12))
 cp "$BR_OUTPUT/images/Image" "$BR_OUTPUT/images/linux.size" "$out/"
 for f in rootfs.ext2 sdcard.img; do
 	if [ -f "$BR_OUTPUT/images/$f" ]; then

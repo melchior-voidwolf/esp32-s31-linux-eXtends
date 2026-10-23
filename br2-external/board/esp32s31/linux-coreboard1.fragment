@@ -1,0 +1,33 @@
+# ESP32-S31-Function-CoreBoard-1: the root on a USB stick, and Ethernet.
+# Buildroot merges this fragment into linux.config for coreboard1_defconfig.
+CONFIG_BUILTIN_DTB_NAME="espressif/esp32s31_coreboard1"
+# The UART is the only console.  The root is p2 of the USB stick with the
+# disk signature of genimage.cfg, also when other USB disks are connected:
+# rootwait waits for usb-storage, which scans a new stick after 1 s.
+CONFIG_CMDLINE="earlycon=sbi console=ttyS0,115200 esp32_shm.radio_service=bt root=PARTUUID=45533331-02 rootfstype=ext4 rootwait rootflags=errors=remount-ro rw"
+
+# No panel, VTs, input devices, card or I2C device.  The one USB port has
+# the root stick, and no console takes input from a USB keyboard.
+# CONFIG_FB is not set
+# CONFIG_VT is not set
+# CONFIG_INPUT is not set
+# CONFIG_HID is not set
+# CONFIG_MMC is not set
+# CONFIG_REGULATOR is not set
+# CONFIG_I2C is not set
+# The stick is the root, and no script waits for a second one.
+# CONFIG_UEVENT_HELPER is not set
+
+# Gigabit Ethernet: the GMAC of the SoC with stmmac, and the Motorcomm
+# YT8531 PHY.  stmmac needs the ethtool netlink interface.  No PTP clock, so
+# also no devlink (0015).
+CONFIG_ETHERNET=y
+CONFIG_ETHTOOL_NETLINK=y
+CONFIG_STMMAC_ETH=y
+CONFIG_DWMAC_ESP32S31=y
+# CONFIG_DWMAC_GENERIC is not set
+CONFIG_MOTORCOMM_PHY=y
+# The GMAC takes its MAC address from an nvmem cell of the eFuse.
+CONFIG_NVMEM=y
+CONFIG_NVMEM_ESP32S31_EFUSE=y
+# CONFIG_PTP_1588_CLOCK is not set

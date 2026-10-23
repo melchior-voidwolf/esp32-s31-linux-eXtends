@@ -5,8 +5,9 @@ its current form. It is for developers who know the RISC-V Linux kernel and
 want to understand this SoC. All facts are from chip revision v0.0 on the
 ESP32-S31-Korvo-1 board. Most of them were measured with JTAG, because
 Espressif does not publish a technical reference manual for this chip yet.
-The port has two builds: `korvo1` for that board, and `esp32s31` for the
-ESP32-S31-WROOM-3-N16R16V module alone, which is the module of the Korvo-1.
+The port has three builds: `esp32s31` for the ESP32-S31-WROOM-3-N16R16V
+module alone, `coreboard1` for the ESP32-S31-Function-CoreBoard-1, and
+`korvo1` for the Korvo-1. The two boards use that module.
 
 The ESP-IDF register headers (`components/soc/esp32s31/register/soc/`) are
 the best public reference for addresses and fields.
@@ -33,10 +34,11 @@ ROM -> ESP-IDF 2nd stage -> loader (hart 0) -> OpenSBI (hart 1, M) -> Linux (har
 
 1. The ESP-IDF second-stage bootloader starts the loader application
    (`bootloader/main/`) on hart 0.
-2. The loader starts PSRAM, and on the Korvo-1 the SD slot pins, the RMT for
-   the LED and the LCD (`board_korvo1.c`). It copies two flash partitions
+2. The loader starts PSRAM, and on the Korvo-1 the LCD
+   (`board_korvo1.c`). It copies two flash partitions
    to PSRAM and checks them: the kernel `Image` (size and CRC32 from a
-   manifest at the end of the kernel partition) and OpenSBI `fw_jump`. It starts Wi-Fi and Bluetooth.
+   manifest at the end of the kernel partition) and OpenSBI `fw_jump`. It
+   starts Wi-Fi and Bluetooth.
 3. The loader writes the D-cache back, sets the PMA of hart 1 for PSRAM and
    releases hart 1 at the OpenSBI entry. Then it locks hart 0 out of PSRAM
    and the DMA pool with PMP.
@@ -44,9 +46,11 @@ ROM -> ESP-IDF 2nd stage -> loader (hart 0) -> OpenSBI (hart 1, M) -> Linux (har
    firmware.
 5. OpenSBI sets up the CLIC, the timer, PMP, APM and the SBI extensions.
    Then it jumps to the kernel in S-mode.
-6. The kernel has a built-in DTB (`esp32s31_korvo1.dts` or
-   `esp32s31.dts`). On the Korvo-1, the root is the ext4 partition
-   `/dev/mmcblk0p2` on the SD card (`root=` and `rootwait`). On the
+6. The kernel has a built-in DTB (`esp32s31.dts`,
+   `esp32s31_coreboard1.dts` or `esp32s31_korvo1.dts`). On the Korvo-1,
+   the root is the ext4 partition `/dev/mmcblk0p2` on the SD card, on the
+   Function-CoreBoard-1 p2 of the USB stick with the disk signature
+   `0x45533331` (`root=PARTUUID=45533331-02` and `rootwait`). On the
    esp32s31 board, the root is the squashfs in the flash, with a UBIFS
    overlay.
 
@@ -57,9 +61,10 @@ ROM -> ESP-IDF 2nd stage -> loader (hart 0) -> OpenSBI (hart 1, M) -> Linux (har
 | `0x2F040000` | 64 KiB | Coherent DMA pool for Linux (`shared-dma-pool`) |
 | `0x2F050000` | 52 KiB | Shared block: requests, flash mailbox, ESP-Hosted rings |
 | `0x2F079000` | 4 KiB | LCD DMA descriptor ring (Korvo-1) |
-| `0x50000000` | 15 MiB | Linux RAM, from the kernel image |
+| `0x50000000` | 15 MiB - 4 KiB | Linux RAM, from the kernel image |
+| `0x50EFF000` | 4 KiB | Guard page below OpenSBI (reserved, no-map, see Protection) |
 | `0x50F00000` | 256 KiB | OpenSBI (reserved, no-map) |
-| `0x50F40000` | 768 KiB | LCD frame buffer (Korvo-1: reserved, no-map, uncached; esp32s31: Linux RAM) |
+| `0x50F40000` | 768 KiB | LCD frame buffer (Korvo-1: reserved, no-map, uncached; other boards: Linux RAM) |
 
 The loader keeps its own copy of these numbers. The device tree
 (`esp32s31.dtsi`) must agree with it.
@@ -120,18 +125,20 @@ The traps that cost the most time:
   supervisor level bits, so all S-mode inputs have level 255.
 - **`sret` restores the interrupt level from `scause.spil`, but only when
   `scause` bit 31 is set.** With an exception-type `scause`, the level stays
-  where it is. The trap exit must write the full CLIC `scause` back before
-  `sret`. `mret` from S-mode does not trap on this revision. It changes
+  where it is. `mret` from S-mode does not trap on this revision. It changes
   only the machine level and leaves `sintstatus.SIL` high, which masks all
   S-mode interrupts.
 - **The level stack and the scheduler.** Only `sret` lowers the level. If a
   handler schedules another task while its level is still high, that task
-  runs with interrupts masked. The trampoline
-  (`arch/riscv/kernel/esp32s31-clic-trampoline.S`) does an `sret` to itself
-  at entry, with `spil` = 0, so that all handlers run at the base level.
+  runs with interrupts masked. The stock `handle_exception` (with the hunks
+  of `linux/patches/0001`) does an `sret` to itself before `do_irq()`, with
+  `spil` = 0, so that all handlers run at the base level.
+- **`scause` holds SPP and SPIE.** In CLIC mode, these bits of `scause` are
+  aliases of the same bits in `sstatus`. A write of `scause` changes them:
+  with 0, `sret` returns in user mode.
 - **Exceptions come to the same vector.** In CLIC mode, `stvec` catches
-  exceptions and interrupts. The trampoline sends exceptions to the usual
-  handlers, and masks the CLIC bits out of `scause` first.
+  exceptions and interrupts, so `handle_exception` is 64-byte aligned. It
+  masks the CLIC bits out of `scause` before the usual exception handlers.
 
 Driver: `drivers/irqchip/irq-esp32s31-clic.c`. Interrupt specifiers have
 three cells: `<CLIC ID, matrix source, type>`. The driver writes the
@@ -153,7 +160,7 @@ resolution of approximately 30 ppm. It also counts in WFI when
 
 A uniprocessor kernel still needs a self-interrupt for `irq_work`. CLIC
 input 1 accepts IP writes but does not arbitrate on this revision. So the
-driver uses external input 16 as a software interrupt (`patches/0006`).
+driver uses external input 16 as a software interrupt (`patches/0005`).
 
 ## Cache and DMA
 
@@ -194,7 +201,7 @@ This is the part that is most different from other RISC-V SoCs.
   for `dma_alloc_coherent()`.
 - **Streaming DMA uses the sync engine** through
   `riscv_noncoherent_register_cache_ops()`. `setup_arch()` enables
-  non-coherent DMA early (`patches/0007`), because slab gets its alignment
+  non-coherent DMA early (`patches/0006`), because slab gets its alignment
   from `dma_get_cache_alignment()` before the initcalls.
 - **The I-cache refills from PSRAM, not from the D-cache, and `fence.i` does
   not invalidate it.** New code (module load, `exec`, JIT) can be in a dirty
@@ -202,7 +209,7 @@ This is the part that is most different from other RISC-V SoCs.
   it. Measured from user space: a write, a flush with `fence.i` and a call of
   the same address gave the old code in 292 of 300 runs. So
   `local_flush_icache_all()` asks OpenSBI to write the D-cache back and to
-  invalidate the I-cache of the hart (`patches/0011`, vendor SBI function 4).
+  invalidate the I-cache of the hart (`patches/0009`, vendor SBI function 4).
   For a new user code page, `flush_icache_pte()` gives only the range of the
   folio (same patch). A test that changes the code in a file page, maps it
   again and calls it gets the new code. Without a new mapping (no sync), it
@@ -216,12 +223,11 @@ This is the part that is most different from other RISC-V SoCs.
 ### Drivers that needed a change for this
 
 - **SD (`dw_mmc`).** The PIO FIFO port does not work on this silicon. The
-  driver must use the internal DMA (IDMAC). Its descriptor ring is usual
-  cached memory, so each change of ownership needs a sync of the full ring
-  (`patches/0003`, `DW_MMC_QUIRK_NONCOHERENT_DESC`).
+  driver must use the internal DMA (IDMAC). Its descriptor ring comes from
+  the coherent DMA pool in internal SRAM, so the stock driver works.
 - **USB (DWC2).** Buffer DMA works through the sync engine. Descriptor DMA
   stays off. The reset FIFO sizes are larger than the 896-word FIFO RAM, so
-  the driver sets smaller ones (`patches/0005`). The DWC2 register window
+  the driver sets smaller ones (`patches/0004`). The DWC2 register window
   must include the FIFO windows at `0x1000 × (channel + 1)`.
 
 ## Protection
@@ -237,6 +243,11 @@ This is the part that is most different from other RISC-V SoCs.
   not checked: the APM sees only bus accesses, so PMP must protect the
   cached addresses. `CPU_APM` checks only CPU accesses, and `HP_MEM_APM`
   covers only SRAM.
+- **The word below an APM region.** `HP_APM` puts the last word below the
+  start of a region into that region. Thus `0x50EFFFFC` is TEE only: a DMA
+  write to it is lost, and an S-mode cache line fill gets wrong data for
+  it. The device tree reserves the page `0x50EFF000` as no-map, so Linux
+  never uses it.
 - **`TEE_SUPERVISOR_PRIV_SEL`** (`0x20504200`) is 0 after the boot, and
   S-mode runs with 0. When it is set for a hart, the S-mode accesses of that
   hart use the M-mode (TEE) path, and the APM protection above is gone.
@@ -258,8 +269,9 @@ the libraries of ESP-IDF. The kernel has the ESP-Hosted host driver
 `esp32_shm` built in, a cfg80211 full-MAC driver. A Buildroot linux
 extension (`br2-external/linux/`) copies it from the submodule into
 `drivers/net/wireless/espressif/esp_hosted`, next to the shared-memory
-transport (`linux/drivers/net/wireless/espressif/esp_hosted/esp_shm.c`). The firmware runs the 802.11 MAC. `wpa_supplicant` and `hostapd` on
-Linux run the authentication and the key handshakes. ESP-Hosted has no
+transport (`linux/drivers/net/wireless/espressif/esp_hosted/esp_shm.c`).
+The firmware runs the 802.11 MAC. `wpa_supplicant` and `hostapd` on Linux
+run the authentication and the key handshakes. ESP-Hosted has no
 transport for a host on the same chip, so the two sides use the frames of
 the USB transport in shared SRAM. The layout is in
 `shared/esp32s31-hosted-shm.h`, which the loader and the driver include.
@@ -363,23 +375,28 @@ Linux sees a standard MTD device.
   shows 64 KiB erase blocks: UBIFS needs a logical erase block of at least
   15 KiB, and UBI takes 128 bytes of each block for its headers.
 
-## The two builds
+## The three builds
 
-The two builds share one Buildroot base
+The three builds share one Buildroot base
 (`br2-external/board/esp32s31/defconfig/common.fragment`), and
-`scripts/mkdefconfigs.sh` merges it with the fragment of the board. A
-setting is in one fragment only, and `make check` fails when a defconfig
+`scripts/mkdefconfigs.sh` merges it with the fragment of the root and the
+fragment of the board. The module alone has its root in the flash
+(`flashroot.fragment`). The Korvo-1 and the Function-CoreBoard-1 have it on
+a disk, the card or a USB stick (`diskroot.fragment`). A setting is in one
+fragment only, and `make check` fails when a defconfig
 in `br2-external/configs/` differs from its fragments.
 
-| | Korvo-1 | Module alone |
-| --- | --- | --- |
-| Base | Kernel, toolchain, BusyBox, Dropbear, OpenSSL, `wpa_supplicant` (WPA3, PEAP/TTLS/TLS, AP mode), curl, iperf3, libgpiod, BlueZ (`bluetoothd`, `bluetoothctl`) | The same |
-| Board parts | ext4 root on the card, `hostapd`, the classic BlueZ tools, bash, vim, gdb, strace, tcpdump, links, MicroPython, Lua, htop, USB and filesystem tools | squashfs root in the flash, UBIFS overlay, the MTD tools |
-| Swap | zram, then p3 of the card | zram only |
+| | Module alone | Function-CoreBoard-1 | Korvo-1 |
+| --- | --- | --- | --- |
+| Base | Kernel, toolchain, BusyBox, Dropbear, OpenSSL, `wpa_supplicant` (WPA3, PEAP/TTLS/TLS, AP mode), curl, iperf3, libgpiod, BlueZ (`bluetoothd`, `bluetoothctl`), Lua | The same | The same |
+| Root | squashfs root in the flash, UBIFS overlay, the MTD tools | ext4 root on the USB stick | ext4 root on the card |
+| Board parts | | Ethernet, USB, the LED | LCD, touch, the card, USB, the LED |
+| Tools | The base only | `hostapd`, the classic BlueZ tools, bash, vim, gdb, strace, tcpdump, links, MicroPython, htop, filesystem tools, tmux, nano, nnn, ncdu, tree, bc, sqlite3, ethtool | `hostapd`, the classic BlueZ tools, bash, vim, gdb, strace, tcpdump, links, MicroPython, htop, filesystem tools, tmux, nano, nnn, ncdu, tree, bc, sqlite3, `evtest`, `gpm`, a tmux desktop on the LCD, lynx, irssi |
+| Swap | zram only | zram, then p3 of the stick | zram, then p3 of the card |
 
-The Korvo-1 has a card with much space, and the module alone has only its
-flash. The base keeps the network, security and Bluetooth stack the same
-on the two boards.
+The Korvo-1 and the Function-CoreBoard-1 have a disk with much space, and
+the module alone has only its flash. The base keeps the network, security
+and Bluetooth stack the same on all boards.
 
 ## Silicon traps
 
@@ -392,6 +409,7 @@ on the two boards.
 | Cache write-back erratum | A single write-back can lose data. Run it twice. |
 | `fence.i` | Does not invalidate the I-cache. Use the sync engine. |
 | Sync engine range | It does not round the size up to a line. Align address and size. |
+| `HP_APM` region start | The last word below a region belongs to the region. Keep the page below it out of use. |
 | `cliccfg` layout | Not the layout in the ESP-IDF header. See "Interrupts". |
 | PMP entries overlap | Fault, even for a short time during an update. |
 | PMA entries overlap | No fault. The entry with the lowest index is used. |
@@ -399,6 +417,7 @@ on the two boards.
 | GPIO33/34 | LCD data pins and also the USB Serial/JTAG pins. |
 | Flash program or erase | Freezes the cache of the two harts. Use auto-suspend. |
 | Core bus timeout | Fires behind flash suspends: access fault on PSRAM. Turn it off. |
+| DMA burst to PSRAM | More than 16 beats gives an MSPI error that stops hart 0. The GMAC uses PBL 16 without the x8. |
 
 ## Where to start reading
 
@@ -406,10 +425,12 @@ on the two boards.
 | --- | --- |
 | The handoff | `bootloader/main/main.c` |
 | M-mode setup | `opensbi/platform/esp32s31/platform.c` |
-| Interrupt entry | `linux/arch/riscv/kernel/esp32s31-clic-trampoline.S` |
+| Interrupt entry | `handle_exception` in `arch/riscv/kernel/entry.S`, `linux/patches/0001` |
 | Interrupt controller | `linux/drivers/irqchip/irq-esp32s31-clic.c` |
-| DMA coherency | `linux/drivers/cache/esp32s31-cache.c`, `linux/patches/0007` |
+| DMA coherency | `linux/drivers/cache/esp32s31-cache.c`, `linux/patches/0006` |
 | Wi-Fi transport | `shared/esp32s31-hosted-shm.h` |
 | The flash root | `bootloader/components/esp_hosted/shm_flash.c`, `linux/drivers/net/wireless/espressif/esp_hosted/esp_shm_flash.c` |
-| The two boards | `bootloader/main/board_*.c`, `br2-external/board/esp32s31/defconfig/*.fragment` (`make defconfigs` makes `br2-external/configs/*_defconfig`) |
+| The boards | `bootloader/main/board_*.c`, `br2-external/board/esp32s31/defconfig/*.fragment` (`make defconfigs` makes `br2-external/configs/*_defconfig`) |
+| Pins and GPIO | `linux/drivers/pinctrl/pinctrl-esp32s31.c` |
+| Clocks and resets | `linux/drivers/clk/clk-esp32s31.c` |
 | Device tree | `linux/arch/riscv/boot/dts/espressif/esp32s31.dtsi` |

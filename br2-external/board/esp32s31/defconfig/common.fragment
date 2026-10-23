@@ -1,6 +1,7 @@
-# The common base of the two builds: toolchain, kernel, system, and the
-# userspace that both have.  scripts/mkdefconfigs.sh merges it with the
-# fragment of each board into br2-external/configs/<board>_defconfig.
+# The common base of the three builds: toolchain, kernel, system, and the
+# userspace that all three have.  scripts/mkdefconfigs.sh merges it with the
+# root fragment and the fragment of each board into
+# br2-external/configs/<board>_defconfig.
 #
 # RV32 IMAC with Zba, Zbb and Zbs, Sv32, soft-float ilp32.  The hart has F
 # but no D, and Linux supports an FPU only with D.
@@ -117,3 +118,5 @@ BR2_PACKAGE_WPA_SUPPLICANT_AP_SUPPORT=y
 # bluetoothd and bluetoothctl, which also has the mgmt commands of btmgmt.
 BR2_PACKAGE_BLUEZ5_UTILS=y
 BR2_PACKAGE_BLUEZ5_UTILS_CLIENT=y
+# Lua, a script language small enough for the flash root of the module.
+BR2_PACKAGE_LUA=y
