@@ -1,0 +1,48 @@
+diff --git a/lib/sbi/sbi_trap.c b/lib/sbi/sbi_trap.c
+--- a/lib/sbi/sbi_trap.c
++++ b/lib/sbi/sbi_trap.c
+@@ -259,6 +259,8 @@
+ 	int rc;
+ 	unsigned long mtopi;
++	bool any = false;
+
+ 	while ((mtopi = csr_read(CSR_MTOPI))) {
++		any = true;
+ 		mtopi = mtopi >> TOPI_IID_SHIFT;
+ 		switch (mtopi) {
+@@ -280,7 +282,13 @@
+ 		}
+ 	}
+
+-	return 0;
++	/*
++	 * A CLIC-only core takes M-mode interrupts through the CLIC, even
++	 * when the ISA string lists smaia.  Its mtopi does not mirror the
++	 * CLIC pending bits, so it stays zero while mcause already carries
++	 * the interrupt ID.  Tell the caller to fall back to mcause.
++	 */
++	return any ? 0 : SBI_ENOTSUPP;
+ }
+
+ /**
+@@ -316,11 +324,15 @@
+ 	sbi_trap_set_context(scratch, tcntx);
+
+ 	if (mcause & MCAUSE_IRQ_MASK) {
+-		if (sbi_hart_has_extension(sbi_scratch_thishart_ptr(),
+-					   SBI_HART_EXT_SMAIA))
+-			rc = sbi_trap_aia_irq();
+-		else
+-			rc = sbi_trap_nonaia_irq(mcause & ~MCAUSE_IRQ_MASK);
++		if (sbi_hart_has_extension(sbi_scratch_thishart_ptr(),
++					   SBI_HART_EXT_SMAIA)) {
++			rc = sbi_trap_aia_irq();
++			if (rc == SBI_ENOTSUPP)
++				rc = sbi_trap_nonaia_irq(mcause &
++							 ~MCAUSE_IRQ_MASK);
++		} else {
++			rc = sbi_trap_nonaia_irq(mcause & ~MCAUSE_IRQ_MASK);
++		}
+ 		msg = "unhandled local interrupt";
+ 		goto trap_done;
+ 	}
