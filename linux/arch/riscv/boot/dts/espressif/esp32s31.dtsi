@@ -34,10 +34,16 @@
 		 * use the uncached alias of PSRAM at 0xc0000000.  Thus coherent
 		 * allocations come from internal SRAM, which the data cache
 		 * does not hold.
+		 *
+		 * The pool ends at 0x2f04f000: the last page (0x2f04f000-
+		 * 0x2f04ffff) belongs to the user-space fbaccel library, which
+		 * keeps the PPA/DMA2D DMA descriptors there.  Sharing it with
+		 * the kernel pool corrupts USB/SD DMA transfers under load
+		 * (boot-loop at Xorg start, silent reset).
 		 */
 		dma_pool: dma-pool@2f040000 {
 			compatible = "shared-dma-pool";
-			reg = <0x2f040000 0x10000>;
+			reg = <0x2f040000 0xf000>;
 			linux,dma-default;
 			no-map;
 		};
@@ -61,7 +67,7 @@
 			compatible = "esp,esp32s31", "riscv";
 			reg = <1>;
 			riscv,isa-base = "rv32i";
-			riscv,isa-extensions = "i", "m", "a", "zba", "zbb",
+			riscv,isa-extensions = "i", "m", "a", "f", "zba", "zbb",
 					       "zbs", "c", "zicntr", "zicsr",
 					       "zifencei";
 			mmu-type = "riscv,sv32";

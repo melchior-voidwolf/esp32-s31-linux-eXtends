@@ -48,3 +48,55 @@ BR2_PACKAGE_HOSTAPD=y
 # The BlueZ tools and the deprecated ones (hciconfig, hcitool, hcidump).
 BR2_PACKAGE_BLUEZ5_UTILS_TOOLS=y
 BR2_PACKAGE_BLUEZ5_UTILS_DEPRECATED=y
+
+# X11 on the framebuffer and a minimal matchbox desktop.
+BR2_PACKAGE_XORG7=y
+BR2_PACKAGE_XSERVER_XORG_SERVER=y
+BR2_PACKAGE_XDRIVER_XF86_VIDEO_FBDEV=y
+BR2_PACKAGE_XLIB_LIBX11=y
+BR2_PACKAGE_XLIB_LIBXEXT=y
+BR2_PACKAGE_XLIB_LIBXRENDER=y
+BR2_PACKAGE_XLIB_LIBXT=y
+BR2_PACKAGE_XLIB_LIBXMU=y
+BR2_PACKAGE_XLIB_LIBXPM=y
+BR2_PACKAGE_XLIB_LIBXAW=y
+BR2_PACKAGE_XAPP_XCURSOR-GEN=n
+BR2_PACKAGE_XTERM=y
+BR2_PACKAGE_XFONT_FONT_MISC_MISC=y
+BR2_PACKAGE_XFONT_FONT_CURSOR_MISC=y
+BR2_PACKAGE_XKEYBOARD_CONFIG=y
+BR2_PACKAGE_PIXMAN=y
+BR2_PACKAGE_LIBERATION=y
+BR2_PACKAGE_MATCHBOX=y
+BR2_PACKAGE_MATCHBOX_PANEL=y
+BR2_PACKAGE_MATCHBOX_DESKTOP=y
+BR2_PACKAGE_MATCHBOX_COMMON=y
+BR2_PACKAGE_TS_LIB=y
+BR2_PACKAGE_XAPP_XSET=y
+
+# Desktop upgrade: IceWM replaces matchbox as the window manager; matchbox
+# stays for now as the fallback.  USB keyboard/mouse via evdev (the GT1151
+# touch has no Linux I2C driver yet).  Lightweight tools, no GTK2.
+BR2_PACKAGE_ICEWM=y
+BR2_PACKAGE_DMENU=y
+# slang makes mc use --with-screen=slang; the ncurses build of mc 4.8.33
+# fails its ncursesw detection and then hits implicit-declaration errors
+# with GCC 15.
+BR2_PACKAGE_SLANG=y
+BR2_PACKAGE_MC=y
+BR2_PACKAGE_XAPP_XEDIT=y
+BR2_PACKAGE_FEH=y
+# evdev needs libudev at build time; switch /dev from plain devtmpfs to eudev.
+# Also gives Xorg working AutoAddDevices for hotplugged USB mice/keyboards.
+BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_EUDEV=y
+BR2_PACKAGE_XDRIVER_XF86_INPUT_EVDEV=y
+# PPA/DMA2D-accelerated Xorg driver (EXA Solid/Copy) from ppa-work/.
+BR2_PACKAGE_XDRIVER_XF86_VIDEO_S31=y
+# Desktop clock + jump-scrolling terminal ergonomics.
+BR2_PACKAGE_XAPP_XCLOCK=y
+# Tiny animation demos to eyeball desktop smoothness and input latency:
+# ico (bouncing wireframe), xdbedizzy (spinning pattern, double-buffered),
+# xeyes (follows the pointer).
+BR2_PACKAGE_XAPP_ICO=y
+BR2_PACKAGE_XAPP_XDBEDIZZY=y
+BR2_PACKAGE_XAPP_XEYES=y

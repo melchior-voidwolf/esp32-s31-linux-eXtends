@@ -1,0 +1,14 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Earliest boot signal on the Korvo-1 RGB LED: red while init runs.
+# S98ledready turns it orange (heartbeat) when the console is ready;
+# startde turns it green while the desktop runs.
+# Default off: the LED bleeds into the server webcam that watches the
+# board (glare and a color cast).  Touch RGB on SD p1 to re-enable the
+# whole ledstate family (S02ledstatus/S98ledready/startde green).
+[ -f /mnt/sd/RGB ] || exit 0
+case "$1" in
+start) /usr/bin/ledstate boot ;;
+stop)  /usr/bin/ledstate off ;;
+esac
+exit 0

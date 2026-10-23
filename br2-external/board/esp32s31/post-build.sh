@@ -20,13 +20,40 @@ set -- "$target"
 
 # BusyBox installs a start script for its httpd.  Here httpd is a tool.  The
 # kernel has no module support, so S11modules has nothing to load.
-rm -f "$1/etc/init.d/S90httpd" "$1/etc/init.d/S11modules"
+# Dropbear stays installed but does not autostart: on an 11 MiB machine
+# every idle daemon is working set, and the serial console is the console.
+rm -f "$1/etc/init.d/S90httpd" "$1/etc/init.d/S11modules" "$1/etc/init.d/S50dropbear"
+
+# bluetoothd does not autostart either (it idles at ~1 MiB RSS on a machine
+# with 11 MiB).  The script stays runnable without its S-prefixed name:
+# "sh /etc/init.d/bluetoothd start" brings Bluetooth up on demand.
+if [ -f "$1/etc/init.d/S40bluetoothd" ]; then
+	mv "$1/etc/init.d/S40bluetoothd" "$1/etc/init.d/bluetoothd"
+fi
+
+# Same for dbus-daemon: with bluetoothd off nothing on the minimal desktop
+# rides the bus, and the daemon idles at ~1 MiB.  Start on demand with
+# "sh /etc/init.d/dbus-daemon start" (bluetoothd needs it).
+if [ -f "$1/etc/init.d/S30dbus-daemon" ]; then
+	mv "$1/etc/init.d/S30dbus-daemon" "$1/etc/init.d/dbus-daemon"
+fi
+
+# eudev's stock rules name groups that nothing creates ("specified group
+# 'input'/'sgx'/'kvm' unknown at boot).  Add them; post-build runs once per
+# build, so stay idempotent or incremental rebuilds duplicate the lines and
+# mkusers chokes on them.
+grep -q '^input:' "$1/etc/group" || echo "input:x:991:" >> "$1/etc/group"
+grep -q '^sgx:' "$1/etc/group" || echo "sgx:x:992:" >> "$1/etc/group"
+grep -q '^kvm:' "$1/etc/group" || echo "kvm:x:993:" >> "$1/etc/group"
 
 mkdir -p "$1/mnt/sd"
 
-# Buildroot copies the overlays with go=rX.  local-overlay/ can give this file
-# a network key.
-chmod 600 "$1/etc/wpa_supplicant.conf"
+# The wpa_supplicant package drops a default /etc/wpa_supplicant.conf with
+# an open network block: wpa then associates with any open AP, and the
+# ESP-Hosted auth-retry loop starves the 10 MB system (the 2026-10-23
+# desktop freeze).  Ship no conf at all: put wpa_supplicant.conf on p1 to
+# use Wi-Fi, S40wifi prefers it there.
+rm -f "$1/etc/wpa_supplicant.conf"
 
 # The boot scripts run as /bin/sh, BusyBox ash, which needs much less memory
 # than bash.  The interactive shell of root is bash, where the image has it.

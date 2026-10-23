@@ -1,0 +1,12 @@
+config BR2_PACKAGE_XDRIVER_XF86_VIDEO_S31
+	bool "xf86-video-s31"
+	depends on BR2_PACKAGE_XSERVER_XORG_SERVER
+	depends on BR2_PACKAGE_XDRIVER_XF86_VIDEO_FBDEV
+	help
+	  Xorg video driver for the ESP32-S31 Korvo-1 framebuffer with
+	  EXA hooks into the PPA/DMA2D 2D engines (Solid fill and
+	  screen-to-screen Copy).  Falls back to CPU rendering for
+	  overlap directions the DMA cannot do safely.
+
+	  Sources: package/xdriver-xf86-video-s31/src (fbdev skeleton
+	  plus s31_exa.c on top of the fbaccel register recipes).

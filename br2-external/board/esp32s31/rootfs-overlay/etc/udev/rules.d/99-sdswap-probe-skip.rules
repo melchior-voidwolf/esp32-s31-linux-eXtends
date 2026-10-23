@@ -1,0 +1,6 @@
+# The 64 MiB swap partition p3 has no filesystem; the stock
+# 60-persistent-storage blkid probe on it has been observed to spin for
+# hundreds of seconds at boot on this board (dw_mmc rev0 + slow card),
+# starving the 320 MHz hart exactly while Wi-Fi and the desktop start.
+# Swap is opt-in via NOSWAP removal; the probe result is never used.
+ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="mmcblk0p3", ENV{UDEV_DISABLE_PERSISTENT_STORAGE_RULES_FLAG}="1"

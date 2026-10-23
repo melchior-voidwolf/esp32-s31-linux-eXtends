@@ -1,0 +1,7 @@
+# ilp32f ABI delta: applied as a SECOND merge pass on top of the korvo1
+# defconfig (override of common.fragment's soft-float lines is intentional
+# here — see docs/ilp32f-feasibility.md).  rv32imafc has F but no D, so
+# the ABI is ilp32f: float in F registers, double stays a libcall.
+# The kernel side (F-only context switch) is patch 0015, already in.
+BR2_RISCV_ISA_RVF=y
+BR2_RISCV_ABI_ILP32F=y

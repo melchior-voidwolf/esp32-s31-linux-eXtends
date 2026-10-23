@@ -6,6 +6,10 @@
 #include <inttypes.h>
 #include <string.h>
 #include "sdkconfig.h"
+#if CONFIG_S31_LINUX_HART1_IRQ_TEST
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#endif
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_heap_caps.h"
@@ -262,6 +266,177 @@ static void start_linux_hart(void)
     ets_set_appcpu_boot_addr((uint32_t)linux_hart_entry);
 }
 
+#if CONFIG_S31_LINUX_HART1_IRQ_TEST
+/*
+ * Bare-metal interrupt-delivery probe for hart 1 (esp-emulator bring-up).
+ * Hart 1 runs in M-mode from IRAM: it arms the CLINT-style machine timer
+ * (mtimecmp match -> CLIC input 7) and prints '.' on UART0 each time the
+ * trap fires.  No PSRAM, no ESP-IDF drivers.  See Kconfig help.
+ */
+#define IRQTEST_UART0_BASE      0x2038a000U
+#define IRQTEST_UART_FIFO       0x00U
+#define IRQTEST_UART_STATUS     0x1cU
+#define IRQTEST_TXCNT_SHIFT     16
+#define IRQTEST_TXCNT_MASK      0xffU
+#define IRQTEST_TXCNT_LIMIT     120U
+
+#define IRQTEST_MTIMER_BASE     0x10000000U
+#define IRQTEST_MTIMECMP_LO     (IRQTEST_MTIMER_BASE + 0x4000U)
+#define IRQTEST_MTIMECMP_HI     (IRQTEST_MTIMER_BASE + 0x4004U)
+#define IRQTEST_MTIMECTL        (IRQTEST_MTIMER_BASE + 0x4010U)
+#define IRQTEST_MTIME_LO        (IRQTEST_MTIMER_BASE + 0xbff8U)
+#define IRQTEST_MTIME_HI        (IRQTEST_MTIMER_BASE + 0xbffcU)
+
+#define IRQTEST_MCLICCFG        0x10800000U
+#define IRQTEST_CLIC_CTRL_BASE  0x10801000U
+#define IRQTEST_CLIC_IP(id)     (IRQTEST_CLIC_CTRL_BASE + 4U * (id) + 0)
+#define IRQTEST_CLIC_IE(id)     (IRQTEST_CLIC_CTRL_BASE + 4U * (id) + 1)
+#define IRQTEST_CLIC_ATTR(id)   (IRQTEST_CLIC_CTRL_BASE + 4U * (id) + 2)
+#define IRQTEST_CLIC_CTL(id)    (IRQTEST_CLIC_CTRL_BASE + 4U * (id) + 3)
+#define IRQTEST_CLIC_MTIMER_ID  7
+#define IRQTEST_CSR_MINTTHRESH  0x347
+
+#define IRQTEST_REG_WRITE(a, v)   (*(volatile uint32_t *)(a) = (uint32_t)(v))
+#define IRQTEST_REG_READ(a)       (*(volatile uint32_t *)(a))
+#define IRQTEST_REG_WRITE8(a, v)  (*(volatile uint8_t *)(a) = (uint8_t)(v))
+
+static void IRAM_ATTR irqtest_putc(char ch)
+{
+    uint32_t status, count;
+
+    do {
+        status = IRQTEST_REG_READ(IRQTEST_UART0_BASE + IRQTEST_UART_STATUS);
+        count = (status >> IRQTEST_TXCNT_SHIFT) & IRQTEST_TXCNT_MASK;
+    } while (count >= IRQTEST_TXCNT_LIMIT);
+    IRQTEST_REG_WRITE(IRQTEST_UART0_BASE + IRQTEST_UART_FIFO, (uint8_t)ch);
+}
+
+static void IRAM_ATTR irqtest_puts(const char *s)
+{
+    while (*s) {
+        if (*s == '\n') {
+            irqtest_putc('\r');
+        }
+        irqtest_putc(*s++);
+    }
+}
+
+static void IRAM_ATTR irqtest_put_hex(uint32_t v)
+{
+    for (int i = 7; i >= 0; i--) {
+        irqtest_putc("0123456789abcdef"[(v >> (i * 4)) & 0xf]);
+    }
+}
+
+static uint64_t IRAM_ATTR irqtest_mtime(void)
+{
+    uint32_t lo, hi, tmp;
+
+    do {
+        hi = IRQTEST_REG_READ(IRQTEST_MTIME_HI);
+        lo = IRQTEST_REG_READ(IRQTEST_MTIME_LO);
+        tmp = IRQTEST_REG_READ(IRQTEST_MTIME_HI);
+    } while (hi != tmp);
+    return ((uint64_t)hi << 32) | lo;
+}
+
+static void IRAM_ATTR irqtest_arm(uint64_t next)
+{
+    IRQTEST_REG_WRITE8(IRQTEST_CLIC_IP(IRQTEST_CLIC_MTIMER_ID), 0);
+    IRQTEST_REG_WRITE(IRQTEST_MTIMECMP_HI, 0xffffffffU);
+    IRQTEST_REG_WRITE(IRQTEST_MTIMECMP_LO, (uint32_t)next);
+    IRQTEST_REG_WRITE(IRQTEST_MTIMECMP_HI, (uint32_t)(next >> 32));
+}
+
+static volatile uint32_t irqtest_hits;
+static volatile uint32_t irqtest_mcause;
+
+
+__attribute__((interrupt("machine"), aligned(64)))
+static void IRAM_ATTR irqtest_handler(void)
+{
+    uint32_t mcause;
+
+    __asm__ volatile ("csrr %0, mcause" : "=r"(mcause));
+    irqtest_hits++;
+    irqtest_mcause = mcause;
+    irqtest_putc('.');
+    if ((irqtest_hits & 0x3f) == 0) {
+        irqtest_puts(" hits=");
+        irqtest_put_hex(irqtest_hits);
+        irqtest_puts(" mcause=");
+        irqtest_put_hex(irqtest_mcause);
+        irqtest_putc('\n');
+    }
+    irqtest_arm(irqtest_mtime() + 3200000U); /* 10 ms at 320 MHz */
+}
+
+/* S-mode spin: M-mode traps must preempt this, then it resumes. */
+__attribute__((naked))
+static void IRAM_ATTR irqtest_s_spin(void)
+{
+    __asm__ volatile ("1: wfi\n\tj 1b\n\t");
+}
+
+static void IRAM_ATTR __attribute__((used)) irqtest_main(void)
+{
+    irqtest_puts("\n\nHART1_IRQTEST start\n");
+
+    /* CLIC: 3 M-level bits, 2 mode bits; thresholds at zero. */
+    IRQTEST_REG_WRITE(IRQTEST_MCLICCFG, (3U << 0) | (2U << 4));
+    __asm__ volatile ("csrw %0, zero" :: "i"(IRQTEST_CSR_MINTTHRESH));
+
+    IRQTEST_REG_WRITE8(IRQTEST_CLIC_IP(IRQTEST_CLIC_MTIMER_ID), 0);
+    IRQTEST_REG_WRITE8(IRQTEST_CLIC_ATTR(IRQTEST_CLIC_MTIMER_ID), 0xc2); /* M, edge */
+    IRQTEST_REG_WRITE8(IRQTEST_CLIC_CTL(IRQTEST_CLIC_MTIMER_ID), 0xff);
+    IRQTEST_REG_WRITE8(IRQTEST_CLIC_IE(IRQTEST_CLIC_MTIMER_ID), 1);
+
+    IRQTEST_REG_WRITE(IRQTEST_MTIMECTL, 1);
+
+    __asm__ volatile ("csrw mtvec, %0" :: "r"((uint32_t)&irqtest_handler | CONFIG_S31_LINUX_HART1_IRQ_TEST_MTVEC_MODE));
+    __asm__ volatile ("csrs mie, %0" :: "r"(1U << 7));
+    __asm__ volatile ("csrs mstatus, %0" :: "r"(1U << 3));
+    /* The handler prologue saves the FPU registers: FS must not be Off. */
+    __asm__ volatile ("csrs mstatus, %0" :: "r"(3U << 13));
+
+    irqtest_puts("HART1_IRQTEST armed, mtime=");
+    irqtest_put_hex((uint32_t)irqtest_mtime());
+    irqtest_putc('\n');
+
+    irqtest_arm(irqtest_mtime() + 3200000U);
+
+    /* Phase 1: 10 hits in M-mode, proving basic delivery. */
+    while (irqtest_hits < 10) {
+        __asm__ volatile ("wfi");
+    }
+
+    /*
+     * Phase 2: drop to S-mode.  OpenSBI's timer traps fire while Linux
+     * runs in S-mode, so this is the path the kernel boot depends on.
+     */
+    irqtest_puts("\nHART1_IRQTEST entering S-mode\n");
+    uint32_t mstatus;
+    __asm__ volatile ("csrr %0, mstatus" : "=r"(mstatus));
+    mstatus &= ~(3U << 11);
+    mstatus |= 1U << 11; /* MPP = S */
+    __asm__ volatile ("csrw mstatus, %0" :: "r"(mstatus));
+    __asm__ volatile ("csrw mepc, %0" :: "r"(&irqtest_s_spin));
+    __asm__ volatile ("mret");
+    __builtin_unreachable();
+}
+
+
+/* Runs on hart 1; the ROM left it without a valid stack here. */
+__attribute__((naked))
+static void IRAM_ATTR irqtest_entry(void)
+{
+    __asm__ volatile (
+        "li sp, 0x2f07e5e0\n\t"
+        "j  irqtest_main\n\t");
+}
+#endif /* CONFIG_S31_LINUX_HART1_IRQ_TEST */
+
+
 static const esp_partition_t *find_partition(const char *name)
 {
     const esp_partition_t *part = esp_partition_find_first(
@@ -385,6 +560,17 @@ static bool load_opensbi_partition(void)
 
 void app_main(void)
 {
+#if CONFIG_S31_LINUX_HART1_IRQ_TEST
+    disable_watchdogs();
+    esp_cpu_unstall(LINUX_HART);
+    cpu_utility_ll_enable_clock_and_reset_app_cpu();
+    ets_set_appcpu_boot_addr((uint32_t)irqtest_entry);
+    ESP_LOGW(TAG, "hart 1 interrupt test started, not booting Linux");
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+#endif
+
     open_apm();
     disable_watchdogs();
     /*
@@ -399,7 +585,11 @@ void app_main(void)
     }
     board_init();
 
-    if (!load_opensbi_partition() || !load_kernel_partition()) {
+    if (!load_opensbi_partition()) {
+        esp_restart();
+    }
+    /* An IMAGE.BIN on the FAT partition of the card wins over flash. */
+    if (!load_kernel_sd() && !load_kernel_partition()) {
         esp_restart();
     }
 
@@ -416,9 +606,13 @@ void app_main(void)
      * the host then changes nothing.
      */
     esp_hosted_main();
+#if CONFIG_S31_LINUX_START_BT
     if (esp_radio_service_apply(ESP_RADIO_SERVICE_BT, NULL, NULL, NULL) != ESP_OK) {
         ESP_LOGW(TAG, "Bluetooth did not start");
     }
+#else
+    ESP_LOGW(TAG, "Bluetooth start skipped (CONFIG_S31_LINUX_START_BT=n)");
+#endif
 
     disable_linux_hart_stack_protector();
     flush_l1_cache_before_handoff();

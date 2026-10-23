@@ -3,8 +3,11 @@
 FROM debian:bookworm
 
 # Buildroot host dependencies, plus dosfstools/mtools for genimage and
-# python3 for post-image.sh.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# python3 for post-image.sh.  USTC mirror: mainland-China network.
+RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g; s|security.debian.org|mirrors.ustc.edu.cn|g' \
+        /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
+    apt-get -o Acquire::Retries=10 update && \
+    apt-get -o Acquire::Retries=10 install -y --no-install-recommends \
         bc binutils build-essential bzip2 ca-certificates cpio diffutils \
         dosfstools file findutils git gzip libncurses-dev make \
         mtools patch perl python3 rsync sed tar unzip wget which xz-utils \

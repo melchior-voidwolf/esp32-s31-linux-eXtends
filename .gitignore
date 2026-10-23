@@ -7,3 +7,4 @@ logs/*.log
 logs/*.json
 local-overlay/*
 !local-overlay/.empty
+dl/

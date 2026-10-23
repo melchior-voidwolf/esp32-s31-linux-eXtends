@@ -1,0 +1,8 @@
+# Keep the Korvo-1 kernel below the loader's proven safe size; Wi-Fi stays enabled.
+# CONFIG_BT is not set
+# CONFIG_BT_BCM is not set
+# CONFIG_BT_RTL is not set
+# CONFIG_BT_INTEL is not set
+# CONFIG_BT_MTK is not set
+# CONFIG_BT_QCA is not set
+# CONFIG_NFC is not set

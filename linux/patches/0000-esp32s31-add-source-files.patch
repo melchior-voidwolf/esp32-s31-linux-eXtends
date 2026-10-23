@@ -474,7 +474,7 @@ diff --git a/arch/riscv/boot/dts/espressif/esp32s31.dtsi b/arch/riscv/boot/dts/e
 new file mode 100644
 --- /dev/null
 +++ b/arch/riscv/boot/dts/espressif/esp32s31.dtsi
-@@ -0,0 +1,220 @@
+@@ -0,0 +1,226 @@
 +// SPDX-License-Identifier: GPL-2.0+
 +/*
 + * Espressif ESP32-S31 minimal device tree.
@@ -511,10 +511,16 @@ new file mode 100644
 +		 * use the uncached alias of PSRAM at 0xc0000000.  Thus coherent
 +		 * allocations come from internal SRAM, which the data cache
 +		 * does not hold.
++		 *
++		 * The pool ends at 0x2f04f000: the last page (0x2f04f000-
++		 * 0x2f04ffff) belongs to the user-space fbaccel library, which
++		 * keeps the PPA/DMA2D DMA descriptors there.  Sharing it with
++		 * the kernel pool corrupts USB/SD DMA transfers under load
++		 * (boot-loop at Xorg start, silent reset).
 +		 */
 +		dma_pool: dma-pool@2f040000 {
 +			compatible = "shared-dma-pool";
-+			reg = <0x2f040000 0x10000>;
++			reg = <0x2f040000 0xf000>;
 +			linux,dma-default;
 +			no-map;
 +		};
@@ -538,7 +544,7 @@ new file mode 100644
 +			compatible = "esp,esp32s31", "riscv";
 +			reg = <1>;
 +			riscv,isa-base = "rv32i";
-+			riscv,isa-extensions = "i", "m", "a", "zba", "zbb",
++			riscv,isa-extensions = "i", "m", "a", "f", "zba", "zbb",
 +					       "zbs", "c", "zicntr", "zicsr",
 +					       "zifencei";
 +			mmu-type = "riscv,sv32";
@@ -699,7 +705,7 @@ diff --git a/arch/riscv/boot/dts/espressif/esp32s31_korvo1.dts b/arch/riscv/boot
 new file mode 100644
 --- /dev/null
 +++ b/arch/riscv/boot/dts/espressif/esp32s31_korvo1.dts
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,91 @@
 +// SPDX-License-Identifier: GPL-2.0+
 +/*
 + * ESP32-S31-Korvo-1: 800x480 RGB panel, microSD slot, USB 2.0 host port
@@ -708,6 +714,7 @@ new file mode 100644
 + */
 +/dts-v1/;
 +#include "esp32s31.dtsi"
++#include <dt-bindings/gpio/gpio.h>
 +
 +/ {
 +	model = "Espressif ESP32-S31-Korvo-1";
@@ -764,6 +771,32 @@ new file mode 100644
 +
 +/* WS2812 RGB LED on GPIO37. */
 +&rgb_led { status = "okay"; };
++
++/ {
++	/*
++	 * GT1151 capacitive touch of the panel.  The Korvo-1 wires it to
++	 * GPIO0 (SDA) and GPIO1 (SCL) with no interrupt and no reset line,
++	 * so the goodix driver polls the chip.  No native I2C adapter driver
++	 * exists yet; bitbang is fast enough for touch reports.
++	 */
++	i2c_touch: i2c-gpio {
++		compatible = "i2c-gpio";
++		/* open-drain flags silence the gpiolib "enforced open drain"
++		 * warnings at boot (i2c-gpio drives these open-drain anyway). */
++		sda-gpios = <&gpio 0 GPIO_OPEN_DRAIN>;
++		scl-gpios = <&gpio 1 GPIO_OPEN_DRAIN>;
++		i2c-gpio,delay-us = <2>;	/* ~250 kHz */
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		gt1151: touchscreen@14 {
++			compatible = "goodix,gt1151";
++			reg = <0x14>;	/* this board straps the chip to 0x14, not 0x5d */
++			touchscreen-size-x = <800>;
++			touchscreen-size-y = <480>;
++		};
++	};
++};
 diff --git a/arch/riscv/include/asm/esp32s31-cache.h b/arch/riscv/include/asm/esp32s31-cache.h
 new file mode 100644
 --- /dev/null

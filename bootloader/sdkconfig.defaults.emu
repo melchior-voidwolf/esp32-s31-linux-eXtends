@@ -1,0 +1,2 @@
+# Emulator variant: the esp-emu S31 model hangs in BT controller enable.
+CONFIG_S31_LINUX_START_BT=n

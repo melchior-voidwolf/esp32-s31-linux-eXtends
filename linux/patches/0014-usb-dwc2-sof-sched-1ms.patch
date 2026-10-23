@@ -1,0 +1,43 @@
+From: Korvo-1 project
+Subject: [PATCH] usb: dwc2: run the periodic scheduler on 1 ms boundaries
+
+On the ESP32-S31 host port the SOF interrupt fires every microframe at
+high speed (8 kHz).  Each SOF runs the periodic scheduler, and the
+scheduled split transactions raise several channel interrupts per poll:
+measured ~15 kIRQ/s total with one HID keyboard attached, which kept the
+320 MHz soft-float hart at sy 60-75% and made X11 unusable.
+
+HID-class interrupt endpoints are specified in whole milliseconds, so
+run the scheduler on 1 ms boundaries only.  QH activation is due-frame
+based, so endpoints simply run at the next 1 ms tick.  Forcing the whole
+port to full speed instead (HCFG_FSLSSUPP) also fixes the storm, but it
+caps the ESP-Hosted Wi-Fi link and any USB NIC at 12 Mbit/s and the
+ESP-Hosted firmware loses association under it, so decimate here and
+keep the port at high speed.
+
+Frame numbers tick at 1 kHz in FS mode; this decimation is only correct
+because the ESP32-S31 glue sets DWC2_SPEED_PARAM_HIGH.
+
+Signed-off-by: Korvo-1 project
+---
+ drivers/usb/dwc2/hcd_intr.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+--- a/drivers/usb/dwc2/hcd_intr.c
++++ b/drivers/usb/dwc2/hcd_intr.c
+@@ -125,5 +125,15 @@ static void dwc2_sof_intr(struct dwc2_hsotg *h
+ 	dwc2_track_missed_sofs(hsotg);
+
++	/*
++	 * ESP32-S31: at high speed this interrupt fires every microframe
++	 * (8 kHz) and a full periodic schedule each time costs the 320 MHz
++	 * soft-float hart more than half of its time once HID devices are
++	 * attached.  Interrupt endpoints are specified in whole
++	 * milliseconds, so schedule on 1 ms boundaries only.
++	 */
++	if (hsotg->frame_number & 7)
++		return;
++
+ 	/* Determine whether any periodic QHs should be executed */
+ 	qh_entry = hsotg->periodic_sched_inactive.next;
+ 	while (qh_entry != &hsotg->periodic_sched_inactive) {

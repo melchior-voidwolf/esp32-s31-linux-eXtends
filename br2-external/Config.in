@@ -1,3 +1,6 @@
 source "$BR2_EXTERNAL_ESP32S31_PATH/package/esp-hosted-linux/Config.in"
 source "$BR2_EXTERNAL_ESP32S31_PATH/package/fastfetch/Config.in"
 source "$BR2_EXTERNAL_ESP32S31_PATH/package/strace-rv32/Config.in"
+source "$BR2_EXTERNAL_ESP32S31_PATH/package/icewm/Config.in"
+source "$BR2_EXTERNAL_ESP32S31_PATH/package/dmenu/Config.in"
+source "$BR2_EXTERNAL_ESP32S31_PATH/package/xdriver-xf86-video-s31/Config.in"

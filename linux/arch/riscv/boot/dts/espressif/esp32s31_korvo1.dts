@@ -6,6 +6,7 @@
  */
 /dts-v1/;
 #include "esp32s31.dtsi"
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	model = "Espressif ESP32-S31-Korvo-1";
@@ -62,3 +63,29 @@
 
 /* WS2812 RGB LED on GPIO37. */
 &rgb_led { status = "okay"; };
+
+/ {
+	/*
+	 * GT1151 capacitive touch of the panel.  The Korvo-1 wires it to
+	 * GPIO0 (SDA) and GPIO1 (SCL) with no interrupt and no reset line,
+	 * so the goodix driver polls the chip.  No native I2C adapter driver
+	 * exists yet; bitbang is fast enough for touch reports.
+	 */
+	i2c_touch: i2c-gpio {
+		compatible = "i2c-gpio";
+		/* open-drain flags silence the gpiolib "enforced open drain"
+		 * warnings at boot (i2c-gpio drives these open-drain anyway). */
+		sda-gpios = <&gpio 0 GPIO_OPEN_DRAIN>;
+		scl-gpios = <&gpio 1 GPIO_OPEN_DRAIN>;
+		i2c-gpio,delay-us = <2>;	/* ~250 kHz */
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		gt1151: touchscreen@14 {
+			compatible = "goodix,gt1151";
+			reg = <0x14>;	/* this board straps the chip to 0x14, not 0x5d */
+			touchscreen-size-x = <800>;
+			touchscreen-size-y = <480>;
+		};
+	};
+};

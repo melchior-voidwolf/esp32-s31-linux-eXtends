@@ -1,0 +1,31 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Boot diagnostic: sample load/cpu/mem/swap into p1 every 20s for 15 min,
+# and once time an 8MB read of the root partition.  Data lands on the FAT
+# partition, so it survives a wedged console — pull the card and read
+# diag.txt on the host.  NODIAG on p1 disables it.
+[ -d /mnt/sd ] || exit 0
+[ -f /mnt/sd/NODIAG ] && exit 0
+
+LOG=/mnt/sd/diag.txt
+
+(
+	echo "=== boot $(date) kernel $(uname -r) ===" >> "$LOG"
+	i=1
+	while [ "$i" -le 45 ]; do
+		{
+			echo "--- t=${i} uptime $(cut -d' ' -f1 /proc/uptime) ---"
+			cat /proc/loadavg
+			grep '^cpu ' /proc/stat
+			grep -E 'MemFree|MemAvailable|SwapTotal|SwapFree' /proc/meminfo
+			ps -eo pid,rss,comm --sort=-rss | head -6
+		} >> "$LOG" 2>&1
+		if [ "$i" = 4 ]; then
+			echo "--- sd read 8MB ---" >> "$LOG"
+			dd if=/dev/mmcblk0p2 of=/dev/null bs=64k count=128 2>&1 | tail -1 >> "$LOG"
+		fi
+		sleep 20
+		i=$((i+1))
+	done
+	echo "=== diag done ===" >> "$LOG"
+) &

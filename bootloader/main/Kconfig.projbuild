@@ -15,4 +15,31 @@ config S31_LINUX_BOARD_ESP32S31
 
 endchoice
 
+config S31_LINUX_START_BT
+    bool "Start Bluetooth before the Linux handoff"
+    default y
+    help
+        The esp-emulator S31 model hangs in the BT controller enable
+        (BTDM init completes, then the guest spins).  Say n for emulator
+        builds; Wi-Fi over ESP-Hosted is unaffected.
+
+config S31_LINUX_HART1_IRQ_TEST
+    bool "Run a bare-metal CLIC timer-interrupt test on hart 1"
+    default n
+    help
+        Diagnostic for esp-emulator bring-up: instead of booting Linux,
+        hart 1 programs its machine timer (mtimecmp match -> CLIC input 7,
+        M-mode) and prints one character on UART0 per delivered interrupt.
+        On hardware this prints a stream of dots; if the emulator never
+        delivers the trap, only the start banner appears.
+
+config S31_LINUX_HART1_IRQ_TEST_MTVEC_MODE
+    int "mtvec mode bits for the hart 1 interrupt test"
+    depends on S31_LINUX_HART1_IRQ_TEST
+    default 3
+    range 0 3
+    help
+        3 selects CLIC mode.  0 is what stock OpenSBI writes (direct mode);
+        hardware forces CLIC anyway, but an emulator may take it literally.
+
 endmenu

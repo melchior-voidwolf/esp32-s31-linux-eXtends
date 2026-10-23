@@ -1,0 +1,25 @@
+#!/bin/sh
+# ledstate <state> — Korvo-1 WS2812 (rgb:status) boot/status lamp.
+# Dim on purpose (the bare WS2812 at full duty is glaring): the color is
+# set low in multi_intensity.  ALL STATES SOLID — breathing was tried and
+# rejected by the user as annoying (2026-10-22).
+#   boot     dim red solid           kernel is up, init scripts running
+#   console  dim orange solid        shell ready, no desktop (default look)
+#   desktop  dim green solid         X + window manager running
+#   off      dark                    shutdown/reboot
+LED=/sys/class/leds/rgb:status
+[ -d "$LED" ] || exit 0
+
+set_rgb() { # R G B
+	echo none > "$LED/trigger"
+	echo "$1 $2 $3" > "$LED/multi_intensity"
+	echo 255 > "$LED/brightness"
+}
+
+case "$1" in
+boot)    set_rgb 100 0 0 ;;
+console) set_rgb 90 30 0 ;;    # 黄红, 常亮
+desktop) set_rgb 0 80 0 ;;
+off)     set_rgb 0 0 0 ;;
+*) echo "usage: ledstate boot|console|desktop|off" >&2; exit 1 ;;
+esac

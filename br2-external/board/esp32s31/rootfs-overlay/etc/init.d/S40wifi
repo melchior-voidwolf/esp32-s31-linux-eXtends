@@ -26,6 +26,10 @@ start_wifi()
 
 case "$1" in
 start)
+	# p1 kill switch (same pattern as NOWALLPAPER): with the ESP-Hosted
+	# auth-timeout storm the wpa retry loop starves the 10 MB system;
+	# touch /mnt/sd/NOWIFI to boot without Wi-Fi, debug via serial.
+	[ -f /mnt/sd/NOWIFI ] && exit 0
 	# OpenSSL takes seconds to load from the compressed root of the module,
 	# and the rest of the boot does not need Wi-Fi.  restart waits, so that
 	# wpa_cli works after it.
