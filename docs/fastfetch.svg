@@ -1,27 +1,72 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="653" height="400" viewBox="0 0 653 400">
+<svg xmlns="http://www.w3.org/2000/svg" width="662" height="388" viewBox="0 0 662 388">
 <rect width="100%" height="100%" rx="8" fill="#0d1117"/>
 <circle cx="20" cy="18" r="6" fill="#ff5f57"/>
 <circle cx="40" cy="18" r="6" fill="#febc2e"/>
 <circle cx="60" cy="18" r="6" fill="#28c840"/>
-<text x="326" y="22" fill="#8b949e" font-family="Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="12" text-anchor="middle">root@esp32s31: fastfetch</text>
+<text x="331" y="22" fill="#8b949e" font-family="Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="12" text-anchor="middle">root@esp32s31: fastfetch</text>
 <g font-family="Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="14" xml:space="preserve">
-<!-- ESP32 logo (real fastfetch output, bold gray/yellow) -->
-<text x="24" y="52" font-weight="bold" fill="#8b949e">    #####          </text><text x="230" y="52" font-weight="bold" fill="#ffd700">root</text><text x="266" y="52" fill="#c9d1d9">@</text><text x="274" y="52" font-weight="bold" fill="#ffd700">esp32s31</text>
-<text x="24" y="70" font-weight="bold" fill="#8b949e">   #######         </text><text x="230" y="70" fill="#c9d1d9">-------------</text>
-<text x="24" y="88" font-weight="bold" fill="#8b949e">   ##</text><text x="56" y="88" font-weight="bold" fill="#ffd700">O</text><text x="64" y="88" font-weight="bold" fill="#8b949e">#</text><text x="72" y="88" font-weight="bold" fill="#ffd700">O</text><text x="80" y="88" font-weight="bold" fill="#8b949e">##        </text><text x="230" y="88" font-weight="bold" fill="#e3b341">OS</text><text x="254" y="88" fill="#c9d1d9">: Buildroot 2026.08 riscv32</text>
-<text x="24" y="106" font-weight="bold" fill="#8b949e">   #</text><text x="40" y="106" font-weight="bold" fill="#ffd700">#####</text><text x="72" y="106" font-weight="bold" fill="#8b949e">#       </text><text x="230" y="106" font-weight="bold" fill="#e3b341">Host</text><text x="270" y="106" fill="#c9d1d9">: Espressif ESP32-S31-Korvo-1</text>
-<text x="16" y="124" font-weight="bold" fill="#8b949e">  ##</text><text x="40" y="124" font-weight="bold" fill="#ffd700">##</text><text x="56" y="124" font-weight="bold" fill="#8b949e">###</text><text x="80" y="124" font-weight="bold" fill="#ffd700">##</text><text x="96" y="124" font-weight="bold" fill="#8b949e">##      </text><text x="230" y="124" font-weight="bold" fill="#e3b341">Kernel</text><text x="286" y="124" fill="#c9d1d9">: Linux 7.3.0</text>
-<text x="8" y="142" font-weight="bold" fill="#8b949e">   #</text><text x="24" y="142" font-weight="bold" fill="#ffd700">##########</text><text x="96" y="142" font-weight="bold" fill="#8b949e">##       </text><text x="230" y="142" font-weight="bold" fill="#e3b341">Uptime</text><text x="286" y="142" fill="#c9d1d9">: 11 mins</text>
-<text x="4" y="160" font-weight="bold" fill="#8b949e">  #</text><text x="20" y="160" font-weight="bold" fill="#ffd700">############</text><text x="104" y="160" font-weight="bold" fill="#8b949e">##     </text><text x="230" y="160" font-weight="bold" fill="#e3b341">Shell</text><text x="278" y="160" fill="#c9d1d9">: bash 5.2.37</text>
-<text x="4" y="178" font-weight="bold" fill="#8b949e">  #</text><text x="20" y="178" font-weight="bold" fill="#ffd700">############</text><text x="104" y="178" font-weight="bold" fill="#8b949e">###    </text><text x="230" y="178" font-weight="bold" fill="#e3b341">Terminal</text><text x="302" y="178" fill="#c9d1d9">: vt100</text>
-<text x="4" y="196" font-weight="bold" fill="#ffd700"> ##</text><text x="28" y="196" font-weight="bold" fill="#8b949e">#</text><text x="36" y="196" font-weight="bold" fill="#ffd700">###########</text><text x="112" y="196" font-weight="bold" fill="#ffd700">#</text><text x="120" y="196" font-weight="bold" fill="#8b949e">##</text><text x="136" y="196" font-weight="bold" fill="#ffd700">#</text><text x="144" y="196" font-weight="bold" fill="#8b949e">     </text><text x="230" y="196" font-weight="bold" fill="#e3b341">CPU</text><text x="254" y="196" fill="#c9d1d9">: esp32s31, 1 hart @ 320 MHz</text>
-<text x="2" y="214" font-weight="bold" fill="#ffd700">######</text><text x="38" y="214" font-weight="bold" fill="#8b949e">#</text><text x="46" y="214" font-weight="bold" fill="#ffd700">#######</text><text x="88" y="214" font-weight="bold" fill="#8b949e">#</text><text x="96" y="214" font-weight="bold" fill="#ffd700">######</text><text x="230" y="214" font-weight="bold" fill="#e3b341">Memory</text><text x="294" y="214" fill="#c9d1d9">: 9.56 MiB / 10.55 MiB (91%)</text>
-<text x="2" y="232" font-weight="bold" fill="#ffd700">#######</text><text x="44" y="232" font-weight="bold" fill="#8b949e">#####</text><text x="80" y="232" font-weight="bold" fill="#ffd700">#</text><text x="88" y="232" font-weight="bold" fill="#8b949e">#######</text><text x="230" y="232" font-weight="bold" fill="#e3b341">Swap</text><text x="262" y="232" fill="#c9d1d9">: 9.08 MiB / 12.00 MiB (76%)</text>
-<text x="4" y="250" font-weight="bold" fill="#ffd700"> #####</text><text x="40" y="250" font-weight="bold" fill="#8b949e">#######</text><text x="96" y="250" font-weight="bold" fill="#ffd700">#####</text><text x="230" y="250" font-weight="bold" fill="#e3b341">Disk (/)</text><text x="302" y="250" fill="#c9d1d9">: 126.61 MiB / 487.58 MiB (26%) - ext4</text>
-<text x="230" y="268" font-weight="bold" fill="#e3b341">Disk (/mnt/sd)</text><text x="350" y="268" fill="#c9d1d9">: 4.63 MiB / 63.86 MiB (7%) - vfat</text>
-<text x="230" y="286" font-weight="bold" fill="#e3b341">Locale</text><text x="286" y="286" fill="#c9d1d9">: C</text>
-<!-- the two 8-color palette rows fastfetch prints -->
-<rect x="230" y="304" width="26" height="16" fill="#000000"/><rect x="260" y="304" width="26" height="16" fill="#aa0000"/><rect x="290" y="304" width="26" height="16" fill="#00aa00"/><rect x="320" y="304" width="26" height="16" fill="#aa5500"/><rect x="350" y="304" width="26" height="16" fill="#0000aa"/><rect x="380" y="304" width="26" height="16" fill="#aa00aa"/><rect x="410" y="304" width="26" height="16" fill="#00aaaa"/><rect x="440" y="304" width="26" height="16" fill="#aaaaaa"/>
-<rect x="230" y="322" width="26" height="16" fill="#555555"/><rect x="260" y="322" width="26" height="16" fill="#ff5555"/><rect x="290" y="322" width="26" height="16" fill="#55ff55"/><rect x="320" y="322" width="26" height="16" fill="#ffff55"/><rect x="350" y="322" width="26" height="16" fill="#5555ff"/><rect x="380" y="322" width="26" height="16" fill="#ff55ff"/><rect x="410" y="322" width="26" height="16" fill="#55ffff"/><rect x="440" y="322" width="26" height="16" fill="#ffffff"/>
+<rect x="230.0" y="332" width="8.9" height="18" fill="#484f58"/>
+<rect x="238.4" y="332" width="8.9" height="18" fill="#484f58"/>
+<rect x="246.8" y="332" width="8.9" height="18" fill="#484f58"/>
+<rect x="255.2" y="332" width="8.9" height="18" fill="#ff7b72"/>
+<rect x="263.6" y="332" width="8.9" height="18" fill="#ff7b72"/>
+<rect x="272.0" y="332" width="8.9" height="18" fill="#ff7b72"/>
+<rect x="280.4" y="332" width="8.9" height="18" fill="#3fb950"/>
+<rect x="288.8" y="332" width="8.9" height="18" fill="#3fb950"/>
+<rect x="297.2" y="332" width="8.9" height="18" fill="#3fb950"/>
+<rect x="305.6" y="332" width="8.9" height="18" fill="#d29922"/>
+<rect x="314.0" y="332" width="8.9" height="18" fill="#d29922"/>
+<rect x="322.4" y="332" width="8.9" height="18" fill="#d29922"/>
+<rect x="330.8" y="332" width="8.9" height="18" fill="#58a6ff"/>
+<rect x="339.2" y="332" width="8.9" height="18" fill="#58a6ff"/>
+<rect x="347.6" y="332" width="8.9" height="18" fill="#58a6ff"/>
+<rect x="356.0" y="332" width="8.9" height="18" fill="#bc8cff"/>
+<rect x="364.4" y="332" width="8.9" height="18" fill="#bc8cff"/>
+<rect x="372.8" y="332" width="8.9" height="18" fill="#bc8cff"/>
+<rect x="381.2" y="332" width="8.9" height="18" fill="#39c5cf"/>
+<rect x="389.6" y="332" width="8.9" height="18" fill="#39c5cf"/>
+<rect x="398.0" y="332" width="8.9" height="18" fill="#39c5cf"/>
+<rect x="406.4" y="332" width="8.9" height="18" fill="#b1bac4"/>
+<rect x="414.8" y="332" width="8.9" height="18" fill="#b1bac4"/>
+<rect x="423.2" y="332" width="8.9" height="18" fill="#b1bac4"/>
+<rect x="230.0" y="350" width="8.9" height="18" fill="#6e7681"/>
+<rect x="238.4" y="350" width="8.9" height="18" fill="#6e7681"/>
+<rect x="246.8" y="350" width="8.9" height="18" fill="#6e7681"/>
+<rect x="255.2" y="350" width="8.9" height="18" fill="#ffa198"/>
+<rect x="263.6" y="350" width="8.9" height="18" fill="#ffa198"/>
+<rect x="272.0" y="350" width="8.9" height="18" fill="#ffa198"/>
+<rect x="280.4" y="350" width="8.9" height="18" fill="#56d364"/>
+<rect x="288.8" y="350" width="8.9" height="18" fill="#56d364"/>
+<rect x="297.2" y="350" width="8.9" height="18" fill="#56d364"/>
+<rect x="305.6" y="350" width="8.9" height="18" fill="#e3b341"/>
+<rect x="314.0" y="350" width="8.9" height="18" fill="#e3b341"/>
+<rect x="322.4" y="350" width="8.9" height="18" fill="#e3b341"/>
+<rect x="330.8" y="350" width="8.9" height="18" fill="#79c0ff"/>
+<rect x="339.2" y="350" width="8.9" height="18" fill="#79c0ff"/>
+<rect x="347.6" y="350" width="8.9" height="18" fill="#79c0ff"/>
+<rect x="356.0" y="350" width="8.9" height="18" fill="#d2a8ff"/>
+<rect x="364.4" y="350" width="8.9" height="18" fill="#d2a8ff"/>
+<rect x="372.8" y="350" width="8.9" height="18" fill="#d2a8ff"/>
+<rect x="381.2" y="350" width="8.9" height="18" fill="#56d4dd"/>
+<rect x="389.6" y="350" width="8.9" height="18" fill="#56d4dd"/>
+<rect x="398.0" y="350" width="8.9" height="18" fill="#56d4dd"/>
+<rect x="406.4" y="350" width="8.9" height="18" fill="#ffffff"/>
+<rect x="414.8" y="350" width="8.9" height="18" fill="#ffffff"/>
+<rect x="423.2" y="350" width="8.9" height="18" fill="#ffffff"/>
+<text y="57"><tspan x="87.2" fill="#6e7681" font-weight="bold">#####</tspan><tspan x="230.0" fill="#e3b341" font-weight="bold">root</tspan><tspan x="263.6" fill="#c9d1d9">@</tspan><tspan x="272.0" fill="#e3b341" font-weight="bold">esp32s31</tspan></text>
+<text y="75"><tspan x="78.8" fill="#6e7681" font-weight="bold">#######</tspan><tspan x="230.0" fill="#c9d1d9">-------------</tspan></text>
+<text y="93"><tspan x="78.8" fill="#6e7681" font-weight="bold">##</tspan><tspan x="95.6" fill="#ffffff" font-weight="bold">O</tspan><tspan x="104.0" fill="#6e7681" font-weight="bold">#</tspan><tspan x="112.4" fill="#ffffff" font-weight="bold">O</tspan><tspan x="120.8" fill="#6e7681" font-weight="bold">##</tspan><tspan x="230.0" fill="#c9d1d9" font-weight="bold">OS</tspan><tspan x="246.8" fill="#c9d1d9">:</tspan><tspan x="263.6" fill="#c9d1d9">Buildroot</tspan><tspan x="347.6" fill="#c9d1d9">2026.08</tspan><tspan x="414.8" fill="#c9d1d9">riscv32</tspan></text>
+<text y="111"><tspan x="78.8" fill="#6e7681" font-weight="bold">#</tspan><tspan x="87.2" fill="#e3b341" font-weight="bold">#####</tspan><tspan x="129.2" fill="#6e7681" font-weight="bold">#</tspan><tspan x="230.0" fill="#c9d1d9" font-weight="bold">Host</tspan><tspan x="263.6" fill="#c9d1d9">:</tspan><tspan x="280.4" fill="#c9d1d9">Espressif</tspan><tspan x="364.4" fill="#c9d1d9">ESP32-S31-Korvo-1</tspan></text>
+<text y="129"><tspan x="62.0" fill="#6e7681" font-weight="bold">##</tspan><tspan x="78.8" fill="#ffffff" font-weight="bold">##</tspan><tspan x="95.6" fill="#e3b341" font-weight="bold">###</tspan><tspan x="120.8" fill="#ffffff" font-weight="bold">##</tspan><tspan x="137.6" fill="#6e7681" font-weight="bold">##</tspan><tspan x="230.0" fill="#c9d1d9" font-weight="bold">Kernel</tspan><tspan x="280.4" fill="#c9d1d9">:</tspan><tspan x="297.2" fill="#c9d1d9">Linux</tspan><tspan x="347.6" fill="#c9d1d9">7.3.0</tspan></text>
+<text y="147"><tspan x="53.6" fill="#6e7681" font-weight="bold">#</tspan><tspan x="62.0" fill="#ffffff" font-weight="bold">##########</tspan><tspan x="146.0" fill="#6e7681" font-weight="bold">##</tspan><tspan x="230.0" fill="#c9d1d9" font-weight="bold">Uptime</tspan><tspan x="280.4" fill="#c9d1d9">:</tspan><tspan x="297.2" fill="#c9d1d9">56</tspan><tspan x="322.4" fill="#c9d1d9">seconds</tspan></text>
+<text y="165"><tspan x="45.2" fill="#6e7681" font-weight="bold">#</tspan><tspan x="53.6" fill="#ffffff" font-weight="bold">############</tspan><tspan x="154.4" fill="#6e7681" font-weight="bold">##</tspan><tspan x="230.0" fill="#c9d1d9" font-weight="bold">Shell</tspan><tspan x="272.0" fill="#c9d1d9">:</tspan><tspan x="288.8" fill="#c9d1d9">bash</tspan><tspan x="330.8" fill="#c9d1d9">5.2.37</tspan></text>
+<text y="183"><tspan x="45.2" fill="#6e7681" font-weight="bold">#</tspan><tspan x="53.6" fill="#ffffff" font-weight="bold">############</tspan><tspan x="154.4" fill="#6e7681" font-weight="bold">###</tspan><tspan x="230.0" fill="#c9d1d9" font-weight="bold">Terminal</tspan><tspan x="297.2" fill="#c9d1d9">:</tspan><tspan x="314.0" fill="#c9d1d9">vt100</tspan></text>
+<text y="201"><tspan x="36.8" fill="#e3b341" font-weight="bold">##</tspan><tspan x="53.6" fill="#6e7681" font-weight="bold">#</tspan><tspan x="62.0" fill="#ffffff" font-weight="bold">###########</tspan><tspan x="154.4" fill="#6e7681" font-weight="bold">##</tspan><tspan x="171.2" fill="#e3b341" font-weight="bold">#</tspan><tspan x="230.0" fill="#c9d1d9" font-weight="bold">CPU</tspan><tspan x="255.2" fill="#c9d1d9">:</tspan><tspan x="272.0" fill="#c9d1d9">esp32s31</tspan></text>
+<text y="219"><tspan x="20.0" fill="#e3b341" font-weight="bold">######</tspan><tspan x="70.4" fill="#6e7681" font-weight="bold">#</tspan><tspan x="78.8" fill="#ffffff" font-weight="bold">#######</tspan><tspan x="137.6" fill="#6e7681" font-weight="bold">#</tspan><tspan x="146.0" fill="#e3b341" font-weight="bold">######</tspan><tspan x="230.0" fill="#c9d1d9" font-weight="bold">Memory</tspan><tspan x="280.4" fill="#c9d1d9">:</tspan><tspan x="297.2" fill="#c9d1d9">8.07</tspan><tspan x="339.2" fill="#c9d1d9">MiB</tspan><tspan x="372.8" fill="#c9d1d9">/</tspan><tspan x="389.6" fill="#c9d1d9">10.78</tspan><tspan x="440.0" fill="#c9d1d9">MiB</tspan><tspan x="473.6" fill="#c9d1d9">(</tspan><tspan x="482.0" fill="#e3b341">75%</tspan><tspan x="507.2" fill="#c9d1d9">)</tspan></text>
+<text y="237"><tspan x="20.0" fill="#e3b341" font-weight="bold">#######</tspan><tspan x="78.8" fill="#6e7681" font-weight="bold">#</tspan><tspan x="87.2" fill="#ffffff" font-weight="bold">#####</tspan><tspan x="129.2" fill="#6e7681" font-weight="bold">#</tspan><tspan x="137.6" fill="#e3b341" font-weight="bold">#######</tspan><tspan x="230.0" fill="#c9d1d9" font-weight="bold">Swap</tspan><tspan x="263.6" fill="#c9d1d9">:</tspan><tspan x="280.4" fill="#c9d1d9">3.01</tspan><tspan x="322.4" fill="#c9d1d9">MiB</tspan><tspan x="356.0" fill="#c9d1d9">/</tspan><tspan x="372.8" fill="#c9d1d9">69.99</tspan><tspan x="423.2" fill="#c9d1d9">MiB</tspan><tspan x="456.8" fill="#c9d1d9">(</tspan><tspan x="465.2" fill="#3fb950">4%</tspan><tspan x="482.0" fill="#c9d1d9">)</tspan></text>
+<text y="255"><tspan x="36.8" fill="#e3b341" font-weight="bold">#####</tspan><tspan x="78.8" fill="#6e7681" font-weight="bold">#######</tspan><tspan x="137.6" fill="#e3b341" font-weight="bold">#####</tspan><tspan x="230.0" fill="#c9d1d9" font-weight="bold">Disk</tspan><tspan x="272.0" fill="#c9d1d9" font-weight="bold">(/)</tspan><tspan x="297.2" fill="#c9d1d9">:</tspan><tspan x="314.0" fill="#c9d1d9">73.45</tspan><tspan x="364.4" fill="#c9d1d9">MiB</tspan><tspan x="398.0" fill="#c9d1d9">/</tspan><tspan x="414.8" fill="#c9d1d9">487.58</tspan><tspan x="473.6" fill="#c9d1d9">MiB</tspan><tspan x="507.2" fill="#c9d1d9">(</tspan><tspan x="515.6" fill="#3fb950">15%</tspan><tspan x="540.8" fill="#c9d1d9">)</tspan><tspan x="557.6" fill="#c9d1d9">-</tspan><tspan x="574.4" fill="#c9d1d9">ext4</tspan></text>
+<text y="273"><tspan x="230.0" fill="#c9d1d9" font-weight="bold">Disk</tspan><tspan x="272.0" fill="#c9d1d9" font-weight="bold">(/mnt/sd)</tspan><tspan x="347.6" fill="#c9d1d9">:</tspan><tspan x="364.4" fill="#c9d1d9">29.27</tspan><tspan x="414.8" fill="#c9d1d9">MiB</tspan><tspan x="448.4" fill="#c9d1d9">/</tspan><tspan x="465.2" fill="#c9d1d9">63.86</tspan><tspan x="515.6" fill="#c9d1d9">MiB</tspan><tspan x="549.2" fill="#c9d1d9">(</tspan><tspan x="557.6" fill="#3fb950">46%</tspan><tspan x="582.8" fill="#c9d1d9">)</tspan><tspan x="599.6" fill="#c9d1d9">-</tspan><tspan x="616.4" fill="#c9d1d9">vfat</tspan></text>
+<text y="291"><tspan x="230.0" fill="#c9d1d9" font-weight="bold">Local</tspan><tspan x="280.4" fill="#c9d1d9" font-weight="bold">IP</tspan><tspan x="305.6" fill="#c9d1d9" font-weight="bold">(wlan0)</tspan><tspan x="364.4" fill="#c9d1d9">:</tspan><tspan x="381.2" fill="#c9d1d9">192.168.1.105/24</tspan></text>
+<text y="309"><tspan x="230.0" fill="#c9d1d9" font-weight="bold">Locale</tspan><tspan x="280.4" fill="#c9d1d9">:</tspan><tspan x="297.2" fill="#c9d1d9">C</tspan></text>
 </g>
 </svg>

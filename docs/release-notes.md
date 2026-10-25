@@ -40,6 +40,25 @@ alone with UART only.
 On the Korvo-1, the LCD shows the Tux logo and the kernel warnings, then
 the tmux desktop for a USB keyboard.
 
+## New in v0.7.2
+
+- Linux has approximately 360 KiB more RAM on each board. The linker
+  removes the kernel code and data that nothing uses (approximately
+  300 KiB), and OpenSBI gives Linux the 64 KiB of its area that it did not
+  use. On the Korvo-1, MemTotal is 11036 kB (v0.7.1: 10668 kB).
+- `dbus-daemon` and `bluetoothd` start at the first `bluetoothctl`, and not
+  at each boot. When a device is paired, they start at boot as before, so
+  that the device can connect.
+- Thus after the boot, the tmux status bar of the Korvo-1 shows Bluetooth
+  as off until the first `bluetoothctl`.
+
+Flash the new `flash.bin` on all boards: the loader, OpenSBI and the kernel
+must come from the same release. With the OpenSBI of v0.7.1, DMA writes to
+the new 64 KiB of Linux RAM are lost. On the Korvo-1 and the
+Function-CoreBoard-1, Bluetooth on demand is only in the new root: write
+the new disk image, or run `make sdroot`. On the module, the root is in
+`flash.bin`.
+
 ## New in v0.7.1
 
 - The RGB LED works again on the Korvo-1 and the Function-CoreBoard-1. In
@@ -77,7 +96,7 @@ change that you can use; an update keeps the overlay on `data`.
   and errors, and `dmesg` has all messages. On the Korvo-1, the first tmux
   window then shows the list of the tools (`/etc/motd`). Each line of the
   log scrolls the LCD, so the boot of the Korvo-1 to the console takes
-  approximately 2 s more (9.2 to 9.6 s).
+  approximately 2 s more: 9.2 to 9.6 s (v0.6.1: 7.3 to 7.5 s).
 - A USB stick that you connect to the Korvo-1 after the boot is mounted
   once, without "Can't open blockdev" on the console.
 
