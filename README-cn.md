@@ -51,14 +51,14 @@ alpha 硬件表达不了这个。硬挂上只会买到诊断,买不到帧。完�
 桌面配置:IceWM + 壁纸 + `xclock` + GT1151 触摸(i2c-gpio 轮询)+
 USB 键鼠,开机 `startde` 一把梭。
 
-### 2. F-only FPU 内核补丁
+### 2. F-only FPU 内核补丁 + ilp32f flash 用户态
 
 上游 Limits 一节写着"硬件 FPU 不用"——这颗芯有 F 没 D,而 Linux 内核
-历来要求俩都得有。俺们的
-`linux/patches/0015-riscv-f-only-fpu.patch` 教会内核认 `rv32imafc`:
-FPU 上下文切换、hwcap,都齐了。用户态照旧 soft-float `ilp32`,老二进制
-一个不动;想显式用 F 指令的程序(浮点 DSP 之类)现在能用了。
-`/usr/bin/fputest` 打印 `FPUTEST_PASS`,不虚。
+历来要求俩都得有。`linux/patches/0017-riscv-f-only-fpu.patch` 教会内核认
+`rv32imafc`:FPU 上下文切换、hwcap,都齐了。SD 桌面继续用 soft-float
+`ilp32` 保老二进制;新 `korvo1flashf` 则把整套 rootfs 重建成 **ilp32f**。
+两条线上,显式用 F 指令的程序都能跑,`/usr/bin/fputest` 打印
+`FPUTEST_PASS`,不虚。
 
 ### 3. 冷静桌面:把 14 MB 工作集塞进 10.6 MiB 的手艺
 
@@ -95,6 +95,21 @@ Linux 只分到 16 MiB PSRAM 里的 10.6 MiB(内核、OpenSBI、framebuffer
   专用,这里补了 Linux 版,SHA-256 回读校验)。
 - **纯原生构建**:x86 Linux 服务器上不套 Docker 直编
   (`scripts/soft-icewm-native-build.sh`,96 核冷缓存约 25 分钟)。
+
+### 5. 无 X 的 SPI flash 小系统
+
+`korvo1flashf` 是独立的 no-X、no-SD Buildroot 版本:ZSTD squashfs 直接
+挂载、UBIFS 持久 overlay、整套 ilp32f 用户态,保留 Zba/Zbb/Zbs。默认
+`-O2` kernel 开启 `LD_DEAD_CODE_DATA_ELIMINATION`,大小为 5,483,192 字节,
+rootfs 为 4,124,672 字节(3.93 MiB)。有线网、按需 Bluetooth/SSH 和
+audio-ready 库在里头;4 MiB 第一版不带 WPA 用户态,Matter/OTBR 也明确
+暂缓。SD/X 桌面线继续保留,loader 策略分开。上游 v0.7.2 已合并为
+`1b29367`;direct-root 启动、非音频板上验收和 30 分钟混合压测都过了。
+
+直接启动链、镜像硬门禁、双回读备份/恢复和当前验收状态都见
+[flash 小系统指南](docs/korvo1-flash.md)。音频只准备驱动和素材,
+用户没明确点头前不测;Matter/Thread 因 RAM/ROM 和射频共存资源问题
+先不实现。
 
 ## 与上游的关系
 

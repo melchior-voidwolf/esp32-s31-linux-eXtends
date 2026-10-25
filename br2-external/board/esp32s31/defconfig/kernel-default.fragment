@@ -1,0 +1,4 @@
+# The default kernel configuration for the existing SD/USB/module profiles.
+# Keep this separate from the OpenWrt-specific linux.config working copy.
+# korvo1flash uses its own linux-korvo1-flash.config instead.
+BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_ESP32S31_PATH)/board/esp32s31/linux-mainline.config"

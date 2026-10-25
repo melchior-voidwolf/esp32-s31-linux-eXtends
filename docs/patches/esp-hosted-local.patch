@@ -1,0 +1,114 @@
+diff --git a/esp/esp_driver/network_adapter/main/cmd.c b/esp/esp_driver/network_adapter/main/cmd.c
+index 11ef22a..66ad691 100644
+--- a/esp/esp_driver/network_adapter/main/cmd.c
++++ b/esp/esp_driver/network_adapter/main/cmd.c
+@@ -64,6 +64,13 @@ extern volatile uint8_t station_connected;
+ extern volatile uint8_t station_authorized;
+ static uint8_t s_assoc_control_port = 0;
+ static uint8_t s_assoc_is_reassoc = 0;
++
++/*
++ * AP security mode as last configured by CMD_SET_AP_CONFIG.  Open APs
++ * have no pairwise key: CHANGE_STA(AUTHORIZED) must not consult the WPA
++ * PTK state for them (see add_station_node_ap).
++ */
++static wifi_auth_mode_t s_ap_authmode = WIFI_AUTH_OPEN;
+ extern volatile uint8_t association_ongoing;
+ extern volatile uint8_t softap_started;
+ static const uint8_t zero_mac[MAC_ADDR_LEN] = {0};
+@@ -4024,6 +4031,7 @@ int process_set_ap_config(uint8_t if_type, uint8_t *payload, uint16_t payload_le
+              wifi_config.ap.pairwise_cipher);
+ 
+     wifi_config.ap.max_connection = 8;
++    s_ap_authmode = wifi_config.ap.authmode;
+ 
+     ret = esp_wifi_get_mode(&old_mode);
+     if (ret) {
+@@ -4328,12 +4336,26 @@ int add_station_node_ap(void *data)
+ 
+ #define STA_FLAG_AUTHORIZED 1
+     if (cmd == CHANGE_STA) {
++        ESP_EARLY_LOGE(TAG, "DBG change_sta: cmd=%u mask=%lx set=%lx authmode=%d open=%d",
++                     cmd, (unsigned long)flags_mask, (unsigned long)flags_set,
++                     s_ap_authmode, WIFI_AUTH_OPEN);
+         ESP_LOGD(TAG, "sta_flags_set=%lu, sta_flags_mask=%lu sta_modify_mask=%lu\n",
+                  (unsigned long)flags_set, (unsigned long)flags_mask,
+                  (unsigned long)le32toh(sta->sta_param.sta_modify_mask));
+         if (flags_mask & BIT(STA_FLAG_AUTHORIZED)) {
+             if (flags_set & BIT(STA_FLAG_AUTHORIZED)) {
+                 ESP_LOGI(TAG, "%s: authorizing station\n", __func__);
++                /*
++                 * Open AP: there is no pairwise key and no PTK handshake
++                 * by design, so esp_wifi_wpa_ptk_init_done_internal() has
++                 * nothing to report and (observed 2026-10-24 on S31) the
++                 * call never yields a usable answer from this IPC context:
++                 * the host's CHANGE_STA times out after 5 s, treats the
++                 * transport as dead and reboots the firmware into a
++                 * terminal failure.  Authorize open stations directly.
++                 */
++                if (s_ap_authmode == WIFI_AUTH_OPEN)
++                    return ESP_OK;
+                 /* The internal API returns bool: true is success, not an
+                  * esp_err_t error code. The old test incorrectly rejected
+                  * successfully authorized stations with CMD_RESPONSE_FAIL. */
+diff --git a/host/esp_cfg80211.c b/host/esp_cfg80211.c
+index 2edd523..9abc090 100644
+--- a/host/esp_cfg80211.c
++++ b/host/esp_cfg80211.c
+@@ -2376,6 +2376,7 @@ static int esp_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *dev,
+ 		ap_config.channel = 6;
+ 
+ 	ap_config.privacy = info->privacy;
++	priv->ap_is_open = !info->privacy;
+ 	ret = cmd_set_ap_config(priv, &ap_config);
+ 	if (ret)
+ 		goto rollback;
+@@ -2599,6 +2600,28 @@ static int esp_cfg80211_change_station(struct wiphy *wiphy,
+ 				return 0;
+ 			}
+ 
++			/*
++			 * Open AP: authorizing an open-auth station is a
++			 * no-op for the data path (no pairwise key, no PTK
++			 * handshake).  The firmware CHANGE_STA handler cannot
++			 * confirm authorization for such stations (its PTK
++			 * probe rejects/hangs them), which makes hostapd
++			 * deauth every client and can escalate into a
++			 * firmware-restart storm.  Ack locally.
++			 */
++			if (priv->ap_is_open &&
++			    (params->sta_flags_set & authorized)) {
++				esp_info("AP open-auth station %pM authorized locally\\n",
++					 mac);
++				return 0;
++			}
++			if (priv->ap_is_open) {
++				/* Deauthorize of an open station: also a no-op. */
++				esp_info("AP open-auth station %pM deauthorized locally\\n",
++					 mac);
++				return 0;
++			}
++
+ 			auth_only = *params;
+ 			auth_only.sta_flags_mask = authorized;
+ 			auth_only.sta_flags_set &= authorized;
+diff --git a/host/include/esp.h b/host/include/esp.h
+index 1ecd3a4..8fdbed6 100644
+--- a/host/include/esp.h
++++ b/host/include/esp.h
+@@ -268,6 +268,15 @@ struct esp_wifi_device {
+ 	u64                     pending_mgmt_cookie;
+ 	bool                    pending_mgmt_active;
+ 	unsigned long           pending_mgmt_sent_at;
++	/*
++	 * AP mode: the beacon has no privacy bit (open auth).  Station
++	 * AUTHORIZED changes are then acked locally without a firmware
++	 * RPC: open stations have no PTK, and the firmware CHANGE_STA
++	 * path (esp_wifi_wpa_ptk_init_done_internal) neither authorizes
++	 * nor answers reliably for them (S31: ret=262 / 5 s timeout,
++	 * firmware recovery storm).  Set from start_ap beacon privacy.
++	 */
++	bool                    ap_is_open;
+ 
+ 	/* cfg80211 MLME ops hold the wdev lock (wdev->mtx, or the wiphy
+ 	 * mutex from 6.12) across wait_and_decode_cmd_resp(). Stage

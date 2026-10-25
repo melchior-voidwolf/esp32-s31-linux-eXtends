@@ -1,0 +1,7 @@
+ESP32-S31-Korvo-1 Buildroot headless (SPI flash)
+- ilp32f / rv32imafc_zba_zbb_zbs user space in korvo1flashf
+- no X, no SD, no Wi-Fi userland/swap/diagnostics in this small profile
+- wired DHCP: /etc/init.d/S41usbnet restart
+- on demand: /etc/init.d/dropbear, dbus-daemon, bluetoothd
+- audio tools are prepared but audio hardware is intentionally not initialized
+- Matter/Thread/OTBR: deferred for RAM/ROM and radio-coexistence reasons

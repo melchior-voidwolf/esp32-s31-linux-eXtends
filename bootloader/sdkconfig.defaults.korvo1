@@ -8,3 +8,11 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions-korvo1.csv"
 # CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y.
 # Flash and the Linux console use the CP2102N bridge in the two cases.
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+# The panel stays off after the handoff: the active line on this board is
+# the headless OpenWrt light AP, whose kernel manages the 0x50f40000 PSRAM
+# window as ordinary cached RAM (no framebuffer reservation).  The LCDC DMA
+# must not keep streaming that window from Linux' point of view, or the
+# MSPI bus wedges (reset loop at the first mtdblock0 access).
+# For the desktop/X11 line on the Korvo-1 rebuild the loader with
+# CONFIG_S31_LINUX_LCD_KEEP_ALIVE=y (idf.py menuconfig or sdkconfig edit).
+CONFIG_S31_LINUX_LCD_KEEP_ALIVE=n

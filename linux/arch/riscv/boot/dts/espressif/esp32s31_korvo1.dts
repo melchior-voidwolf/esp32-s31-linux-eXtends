@@ -150,3 +150,28 @@
 		touchscreen-size-y = <480>;
 	};
 };
+
+/*
+ * OpenWrt flash firmware: "rootfs" (squashfs, ro) and "data"
+ * from bootloader/partitions-korvo1.csv, from the start of rootfs.
+ */
+&wifi {
+	flash {
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "rootfs";
+				reg = <0x0 0x400000>;
+				read-only;
+			};
+
+			partition@400000 {
+				label = "data";
+				reg = <0x400000 0x1E0000>;
+			};
+		};
+	};
+	};

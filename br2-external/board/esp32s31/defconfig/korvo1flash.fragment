@@ -1,0 +1,17 @@
+# ESP32-S31-Korvo-1 without X or SD: a Buildroot/musl root in SPI flash.
+# Keep BlueZ and the other small common tools, but do not inherit the desktop
+# overlays or their prebuilt soft-float binaries.
+BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_ESP32S31_PATH)/board/esp32s31/rootfs-overlay $(BR2_EXTERNAL_ESP32S31_PATH)/board/esp32s31/rootfs-overlay-flashroot $(BR2_EXTERNAL_ESP32S31_PATH)/board/esp32s31/rootfs-overlay-korvo1flash"
+BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE="$(BR2_EXTERNAL_ESP32S31_PATH)/board/esp32s31/linux-korvo1-flash.config"
+BR2_ROOTFS_POST_SCRIPT_ARGS="headless-flash"
+
+# Audio preparation only: retain the library and kernel codec/ASoC support,
+# but no useless player/mixer while the I2S DAI is absent.  The DTS has no
+# codec or sound-card node, so this phase cannot initialize the ES8389/PA.
+BR2_PACKAGE_ALSA_LIB=y
+# BR2_PACKAGE_ALSA_LIB_RAWMIDI is not set
+# BR2_PACKAGE_ALSA_LIB_HWDEP is not set
+# BR2_PACKAGE_ALSA_LIB_SEQ is not set
+# BR2_PACKAGE_ALSA_LIB_UCM is not set
+# BR2_PACKAGE_ALSA_LIB_OLD_SYMBOLS is not set
+# BR2_PACKAGE_ALSA_LIB_TOPOLOGY is not set

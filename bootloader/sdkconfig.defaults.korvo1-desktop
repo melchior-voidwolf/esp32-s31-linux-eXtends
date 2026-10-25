@@ -1,0 +1,3 @@
+# Desktop Korvo-1 keeps the panel refresh alive for fbdev/fbcon/X11.
+# Headless flash and the OpenWrt-specific loader keep it disabled.
+CONFIG_S31_LINUX_LCD_KEEP_ALIVE=y

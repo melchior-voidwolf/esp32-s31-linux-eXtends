@@ -76,11 +76,11 @@ boot.
 
 Upstream's Limits section says the hardware FPU is not used, because the
 hart has F but no D and Linux wants both. This fork carries a kernel patch
-(`linux/patches/0015-riscv-f-only-fpu.patch`) that teaches the kernel
-`rv32imafc`: FPU context switching and the `hwcap` plumbing. Userspace
-stays soft-float `ilp32`, so existing binaries keep working; programs that
-explicitly use F instructions can now. `/usr/bin/fputest` prints
-`FPUTEST_PASS`.
+(`linux/patches/0017-riscv-f-only-fpu.patch`) that teaches the kernel
+`rv32imafc`: FPU context switching and the `hwcap` plumbing. The SD desktop
+keeps soft-float `ilp32` binaries for compatibility; the new `korvo1flashf`
+profile rebuilds the entire rootfs as **ilp32f**. Programs that explicitly
+use F instructions can now print `FPUTEST_PASS` on either path.
 
 | | `esp32s31` (the default) | `coreboard1` | `korvo1` |
 | --- | --- | --- | --- |
@@ -143,6 +143,24 @@ headless server made every failure mode visible:
   macOS-only flash scripts made portable, with SHA-256 readback verify),
   and a fully native non-Docker build path for x86 Linux servers
   (`scripts/soft-icewm-native-build.sh`).
+
+### 5. A small headless SPI-flash profile
+
+`korvo1flashf` is an independent no-X, no-SD Buildroot profile with a direct
+ZSTD squashfs root, a persistent UBIFS overlay, an ilp32f userspace and the
+existing Zba/Zbb/Zbs instructions. The default `-O2` kernel has
+`LD_DEAD_CODE_DATA_ELIMINATION` enabled and is 5,483,192 bytes; the rootfs is
+4,124,672 bytes (3.93 MiB). Wired Ethernet, on-demand Bluetooth/SSH and
+audio-ready libraries are included; WPA userspace and Matter/OTBR are
+outside this first 4 MiB profile. The SD/X line remains intact with its own
+loader policy. Upstream v0.7.2 is merged as commit `1b29367`; direct-root
+boot, non-audio board acceptance and a 30-minute mixed stability run have all
+passed.
+
+See [the flash profile guide](docs/korvo1-flash.md) for the direct-root boot
+chain, image validation, backup/readback workflow and current verification
+status. Audio hardware testing is blocked until an explicit user request;
+Matter/Thread is deferred for RAM/ROM and radio-coexistence reasons.
 
 ## Relationship to upstream
 

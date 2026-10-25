@@ -4,4 +4,5 @@
 # the ABI is ilp32f: float in F registers, double stays a libcall.
 # The kernel side (F-only context switch) is patch 0015, already in.
 BR2_RISCV_ISA_RVF=y
+# BR2_RISCV_ABI_ILP32 is not set
 BR2_RISCV_ABI_ILP32F=y

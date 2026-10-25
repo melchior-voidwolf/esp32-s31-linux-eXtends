@@ -6,9 +6,15 @@
 #include "display.h"
 #include "loader.h"
 
-/* ESP32-S31-Korvo-1: the 800x480 RGB panel.  Linux starts the card and the LED. */
+/* ESP32-S31-Korvo-1: microSD slot, WS2812 LED and the 800x480 RGB panel. */
 
 static const char *TAG = "s31-linux-korvo1";
+
+void board_init(void)
+{
+    init_sd_card();
+    init_rmt_led();
+}
 
 void board_start_display(void)
 {
@@ -19,5 +25,14 @@ void board_start_display(void)
     if (!display_init()) {
         ESP_LOGW(TAG, "continuing without display");
     }
+#endif
+}
+
+void board_stop_display(void)
+{
+#if CONFIG_S31_LINUX_LCD_KEEP_ALIVE
+    /* The desktop line keeps the DMA reading the reserved fb window. */
+#else
+    display_stop();
 #endif
 }

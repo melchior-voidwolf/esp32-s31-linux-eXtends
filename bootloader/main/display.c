@@ -126,6 +126,27 @@ static void start_dma_link(int channel)
     lcd_ll_start(&LCD_CAM);
 }
 
+/*
+ * Halt the refresh before the handoff.  A headless kernel manages the
+ * 0x50f40000 PSRAM window as ordinary cached RAM; an LCDC DMA master
+ * streaming that window while the CPU cache writes it wedges the MSPI
+ * bus.  Stop the DMA channel first so the PSRAM master is gone, then
+ * the LCD, and reset the channel so no descriptor is in flight when
+ * Linux starts.
+ */
+void display_stop(void)
+{
+    int channel = find_lcd_dma_channel();
+
+    if (channel < 0) {
+        return;
+    }
+    axi_dma_ll_tx_stop(&AXI_DMA, channel);
+    lcd_ll_stop(&LCD_CAM);
+    axi_dma_ll_tx_reset_channel(&AXI_DMA, channel);
+    ESP_LOGI(TAG, "lcd refresh stopped, fb window free for Linux");
+}
+
 bool display_init(void)
 {
     int channel;

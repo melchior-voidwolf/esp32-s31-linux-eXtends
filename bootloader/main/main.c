@@ -518,6 +518,8 @@ static bool load_kernel_partition(void)
                  (uint32_t)memory_size);
         return false;
     }
+    memset((void *)(KERNEL_LOAD_ADDR + image_size), 0,
+           (size_t)memory_size - image_size);
 
     ESP_LOGI(TAG, "kernel copied: flash=0x%08" PRIx32 " file=0x%08" PRIx32
                   " memory=0x%08" PRIx32 " psram=0x%08" PRIx32,
@@ -573,8 +575,7 @@ void app_main(void)
     disable_watchdogs();
     /*
      * ESP-IDF v6.1 stops the TRNG after the second stage.  esp_random() and
-     * the Linux hwrng need it.  Its noise source does not use the RF.  Linux
-     * reads it with timeriomem-rng and credits it as entropy without a check.
+     * the Linux hwrng need it.  Its noise source does not use the RF.
      */
     bootloader_random_enable();
 
@@ -582,14 +583,22 @@ void app_main(void)
         ESP_LOGE(TAG, "PSRAM not initialized");
         esp_restart();
     }
+    board_init();
 
     if (!load_opensbi_partition()) {
         esp_restart();
     }
-    /* An IMAGE.BIN on the FAT partition of the card wins over flash. */
+#if CONFIG_S31_LINUX_SD_KERNEL
+    /* Desktop: an IMAGE.BIN on the FAT partition wins over flash. */
     if (!load_kernel_sd() && !load_kernel_partition()) {
         esp_restart();
     }
+#else
+    /* Flash-only: never let an inserted card bypass the validated image. */
+    if (!load_kernel_partition()) {
+        esp_restart();
+    }
+#endif
 
     board_start_display();
 
@@ -614,6 +623,14 @@ void app_main(void)
 
     disable_linux_hart_stack_protector();
     flush_l1_cache_before_handoff();
+
+    /*
+     * A headless build stops the LCDC DMA here: once hart 1 runs, the
+     * 0x50f40000 PSRAM window is ordinary cached RAM for Linux and no
+     * second bus master may stream it (MSPI wedge, see the Kconfig
+     * help).  The desktop build keeps the refresh alive instead.
+     */
+    board_stop_display();
 
     shm_flash_share_cache();
     start_linux_hart();

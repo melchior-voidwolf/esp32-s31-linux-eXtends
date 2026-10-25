@@ -4,17 +4,14 @@ choice S31_LINUX_BOARD
     prompt "Board"
     default S31_LINUX_BOARD_KORVO1
     help
-        The board selects if the loader starts the display (Korvo-1
-        only).  The Makefile sets it from BOARD.
+        The board selects the peripherals that the loader starts before
+        Linux.  The Makefile sets it from BOARD.
 
 config S31_LINUX_BOARD_KORVO1
     bool "ESP32-S31-Korvo-1 (LCD, microSD, USB, RGB LED)"
 
 config S31_LINUX_BOARD_ESP32S31
     bool "ESP32-S31-WROOM-3-N16R16V module alone (UART0 only)"
-
-config S31_LINUX_BOARD_COREBOARD1
-    bool "ESP32-S31-Function-CoreBoard-1 (USB, RGB LED)"
 
 endchoice
 
@@ -25,6 +22,29 @@ config S31_LINUX_START_BT
         The esp-emulator S31 model hangs in the BT controller enable
         (BTDM init completes, then the guest spins).  Say n for emulator
         builds; Wi-Fi over ESP-Hosted is unaffected.
+
+config S31_LINUX_LCD_KEEP_ALIVE
+    bool "Keep the LCD refresh running after the Linux handoff"
+    default y
+    help
+        The desktop Linux line drives the panel through the frame
+        buffer the loader leaves behind, so the LCDC DMA keeps reading
+        the reserved (uncached) 0x50f40000 window after the handoff.
+        Say n for a headless build (OpenWrt light AP): the loader stops
+        the LCDC DMA before starting hart 1, so the kernel may manage
+        the whole PSRAM as ordinary cached RAM.  A kernel that writes
+        the window cached while the LCDC DMA master keeps streaming it
+        wedges the MSPI bus (observed 2026-10-24: reset loop ~0.7 s
+        into flash-init, exactly at the first mtdblock0 access).
+
+config S31_LINUX_SD_KERNEL
+    bool "Allow IMAGE.BIN on SD to override the flash kernel"
+    default y
+    depends on S31_LINUX_BOARD_KORVO1
+    help
+        Desktop Korvo-1 updates boot IMAGE.BIN from FAT p1 first.  Flash-only
+        profiles disable this override so an inserted card cannot silently
+        boot a different kernel, root filesystem or userspace ABI.
 
 config S31_LINUX_HART1_IRQ_TEST
     bool "Run a bare-metal CLIC timer-interrupt test on hart 1"

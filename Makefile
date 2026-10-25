@@ -1,18 +1,37 @@
 SHELL := /bin/bash
 
-# The board to build for: esp32s31 (the ESP32-S31-WROOM-3-N16R16V alone:
-# UART0, root in the flash), coreboard1 (ESP32-S31-Function-CoreBoard-1:
-# Ethernet, USB, LED, root on a USB stick) or korvo1 (ESP32-S31-Korvo-1: LCD,
-# microSD, USB, LED, root on the card).
+# BOARD selects the Buildroot variant and its independent output directory.
+# HW_BOARD selects the physical loader/partition/DTS family.  In particular,
+# korvo1flash[f] shares Korvo-1 hardware but not the SD rootfs or X packages.
 BOARD ?= esp32s31
-ifeq ($(filter $(BOARD),esp32s31 coreboard1 korvo1),)
-$(error BOARD must be esp32s31, coreboard1 or korvo1, not "$(BOARD)")
+SUPPORTED_BOARDS := esp32s31 esp32s31f coreboard1 korvo1 korvo1f \
+	korvo1flash korvo1flashf
+ifeq ($(filter $(BOARD),$(SUPPORTED_BOARDS)),)
+$(error BOARD must be one of $(SUPPORTED_BOARDS), not "$(BOARD)")
 endif
+HW_BOARD := $(BOARD)
+ifneq ($(filter $(BOARD),esp32s31f),)
+HW_BOARD := esp32s31
+endif
+ifneq ($(filter $(BOARD),korvo1f korvo1flash korvo1flashf),)
+HW_BOARD := korvo1
+endif
+# Optional loader deltas are profile-specific and come after the hardware
+# defaults.  Both flash ABIs share sdkconfig.defaults.korvo1flash.
+LOADER_PROFILE := $(BOARD)
+ifneq ($(filter $(BOARD),korvo1 korvo1f),)
+LOADER_PROFILE := korvo1-desktop
+endif
+ifneq ($(filter $(BOARD),korvo1flashf),)
+LOADER_PROFILE := korvo1flash
+endif
+PROFILE_SDKCONFIG := $(wildcard bootloader/sdkconfig.defaults.$(LOADER_PROFILE))
+FLASH_ROOT_BOARDS := esp32s31 esp32s31f korvo1flash korvo1flashf
 
 BUILD_DIR := build/$(BOARD)
 LOG_DIR := logs
 
-IDF_PATH ?= $(HOME)/esp/esp-idf
+IDF_PATH ?= $(HOME)/esp/esp-idf-6.1
 IDF_TOOLS_PATH ?= $(HOME)/.espressif
 IDF_VERSION := $(shell sed -n 's/^set(IDF_VERSION_M[AI][JN]OR \([0-9]*\))/\1/p' \
 	"$(IDF_PATH)/tools/cmake/version.cmake" 2>/dev/null | paste -sd. -)
@@ -45,53 +64,44 @@ OPENSBI_SRC := $(BUILD_DIR)/opensbi-src
 OPENSBI_OUT := $(CURDIR)/$(BUILD_DIR)/opensbi
 OPENSBI_PATCHES := $(sort $(wildcard opensbi/patches/*.patch))
 # The loader config of the board: the common defaults, then the board.
-SDKCONFIG_DEFAULTS := sdkconfig.defaults;sdkconfig.defaults.$(BOARD)
+SDKCONFIG_DEFAULTS := sdkconfig.defaults;sdkconfig.defaults.$(HW_BOARD)
+ifneq ($(LOADER_PROFILE),$(HW_BOARD))
+ifneq ($(PROFILE_SDKCONFIG),)
+SDKCONFIG_DEFAULTS := $(SDKCONFIG_DEFAULTS);$(notdir $(PROFILE_SDKCONFIG))
+endif
+endif
 # The LCD DMA reads PSRAM without the cache, so the frame buffer must not be
 # cached when the loader starts the LCD.
 FB_UNCACHED := $(shell grep -q '^CONFIG_ESP_CONSOLE_SECONDARY_NONE=y' \
-	bootloader/sdkconfig.defaults.$(BOARD) && echo 1 || echo 0)
+	bootloader/sdkconfig.defaults.$(HW_BOARD) && echo 1 || echo 0)
 # The LCD has the pins of the USB Serial/JTAG, so OpenSBI copies its console
 # to USB only when the loader does not start the LCD.
 USB_CONSOLE := $(if $(filter 1,$(FB_UNCACHED)),0,1)
 
-# Buildroot cannot build on macOS, so it runs in a container.  Its output
-# directory for each board and dl/ are in a volume, because virtiofs is slow
-# for many gigabytes.
+# Native Ubuntu Buildroot: downloads live in dl/, output in build/BOARD.
 BR_DIR := external/buildroot
-BR_IMAGE ?= esp32s31-buildroot:bookworm
-BR_VOLUME ?= esp32s31-br
-BR_VOLUME_SIZE ?= 60G
 BR_DEFCONFIG := $(BOARD)_defconfig
 # The kernel release that Buildroot builds and that kernel-check uses.
 LINUX_VERSION := $(shell sed -n 's/^BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="\(.*\)"/\1/p' \
 	br2-external/configs/$(BR_DEFCONFIG))
-# The guest page cache grows to the full limit.  With 8G on an 8 GB Mac,
-# macOS swapped during a build.
-BR_MEMORY ?= 6G
+BR_JOBS ?= $(JOBS)
+BR_O := $(CURDIR)/$(BUILD_DIR)
+BR_MAKE := make O=$(BR_O) BR2_EXTERNAL=$(CURDIR)/br2-external \
+	BR2_DL_DIR=$(CURDIR)/dl BR2_JLEVEL=$(BR_JOBS)
+# Recipes historically prefixed host commands with a container runner.  Keep
+# the expansion empty so all of them now execute directly on Ubuntu.
+BR_RUN =
 BR_OUT := $(BUILD_DIR)/buildroot
-# GCC needs approximately 1 GB for each of its largest files.  With 6G and
-# the default of one job more than the CPUs, the kernel killed cc1plus.
-BR_JOBS ?= 5
-BR_O := /br/$(BOARD)
-BR_MAKE := make O=$(BR_O) BR2_EXTERNAL=/work/br2-external BR2_DL_DIR=/br/dl \
-	BR2_JLEVEL=$(BR_JOBS)
-CONTAINER ?= $(shell command -v container 2>/dev/null)
-BR_RUN = "$(CONTAINER)" run --rm --cpus $(JOBS) --memory $(BR_MEMORY) \
-	--uid $(shell id -u) --gid $(shell id -g) -e HOME=/br/home \
-	-v $(BR_VOLUME):/br -v "$(CURDIR)":/work "$(BR_IMAGE)"
-# The same image without the build volume, for checks that only read files.
-BR_TOOLS = "$(CONTAINER)" run --rm --uid $(shell id -u) --gid $(shell id -g) \
-	-v "$(CURDIR)":/work "$(BR_IMAGE)"
 
 # The flash layout of the board, from its partition table: field 4 is the
 # offset, field 5 the size.
-PARTITIONS := bootloader/partitions-$(BOARD).csv
+PARTITIONS := bootloader/partitions-$(HW_BOARD).csv
 part_field = $(shell awk -F'[ ,]+' '$$1 == "$(1)" { print $$$(2) }' $(PARTITIONS))
 
-# The squashfs root in the flash, on the module alone.  The Korvo-1 and the
-# Function-CoreBoard-1 have their root on a disk and no rootfs partition.
-ROOT_OFFSET := $(call part_field,rootfs,4)
-ROOT_SIZE := $(call part_field,rootfs,5)
+# A shared CSV may describe flash partitions for another profile.  Only an
+# actual flash-root build includes rootfs.squashfs in its flash image set.
+ROOT_OFFSET := $(if $(filter $(BOARD),$(FLASH_ROOT_BOARDS)),$(call part_field,rootfs,4))
+ROOT_SIZE := $(if $(filter $(BOARD),$(FLASH_ROOT_BOARDS)),$(call part_field,rootfs,5))
 SD_DISK ?=
 SD_RAW = $(subst /dev/disk,/dev/rdisk,$(SD_DISK))
 # Size of the FAT partition.  The root partition gets the rest of the card,
@@ -101,6 +111,8 @@ SD_RAW = $(subst /dev/disk,/dev/rdisk,$(SD_DISK))
 SD_DATA_SIZE ?= 28G
 
 FLASH_PORT ?=
+FLASH_BAUD ?= 921600
+FLASH_AFTER ?= hard-reset
 SERIAL_PORT ?=
 RESET_PORT ?=
 BAUD ?= 115200
@@ -123,17 +135,17 @@ LINUX_SIZE_OFFSET := $(shell printf '0x%x' $$(( $(LINUX_OFFSET) + $(LINUX_SIZE) 
 	kernel-saveconfig \
 	container-image \
 	br-volume br-artifacts rootfs rootfs-menuconfig sdcard sdpart \
-	sdwrite sdroot flash flash-args monitor openocd clean
+	sdwrite sdroot flash flash-only validate-images flash-args monitor openocd clean
 
 help:
 	@printf '%s\n' \
-		'ESP32-S31 Linux (macOS host)' \
+		'ESP32-S31 Linux' \
 		'' \
 		'  make check                         verify host tools and submodules' \
 		'  make ports                         list connected serial devices' \
 		'  make build                         build loader, OpenSBI, Linux, rootfs' \
-		'  make flash FLASH_PORT=/dev/cu.X    build and flash the complete image' \
-		'  make monitor SERIAL_PORT=/dev/cu.X open the Linux UART terminal' \
+		'  make flash FLASH_PORT=/dev/ttyUSB0    build and flash the complete image' \
+		'  make monitor SERIAL_PORT=/dev/ttyUSB0 open the Linux UART terminal' \
 		'  make openocd                       start JTAG via GPIO33/34 USB breakout' \
 		'  make clean                         remove generated build output' \
 		'' \
@@ -153,21 +165,18 @@ help:
 		'  make kernel-menuconfig             configure the kernel' \
 		'  make kernel-saveconfig             write the configuration back' \
 		'' \
-		'Disk (the card or the USB stick), once it is in the Mac' \
-		'(see: diskutil list external):' \
+		'Disk image:' \
 		'' \
 		'  make sdcard                        disk image for a fresh disk' \
-		'  make sdpart  SD_DISK=/dev/diskN   lay out a large disk (ERASES it)' \
-		'  make sdwrite SD_DISK=/dev/diskN   write the whole disk image (ERASES it)' \
-		'  make sdroot  SD_DISK=/dev/diskN   rewrite only the root partition' \
+		'  Ubuntu SD writing: use tools/flash-sd-linux.sh for a whole external disk' \
+		'  (legacy diskutil partition targets are not the current Ubuntu path.)' \
 		'' \
-		'Buildroot host container (it cannot build on macOS):' \
+		'Buildroot (native Ubuntu):' \
 		'' \
-		'  make container-image               build the Debian build image' \
 		'  make rootfs-menuconfig             explore the Buildroot configuration' \
 		'' \
-		'FLASH_PORT is the esptool target: the native USB Serial/JTAG' \
-		'(/dev/cu.usbmodem*) or the CP2102N UART bridge (/dev/cu.usbserial-*).' \
+		'FLASH_PORT is the esptool target (native USB Serial/JTAG or CP2102N;' \
+		'typically /dev/ttyUSB0 on Ubuntu).' \
 		'SERIAL_PORT is the external UART carrying the Linux console.' \
 		'RESET_PORT optionally names a second port whose RTS pulse resets the' \
 		'board before monitoring when SERIAL_PORT cannot (BAUD, BOOT_TIMEOUT' \
@@ -179,17 +188,14 @@ help:
 		'card, on coreboard1 on a USB stick.'
 
 check:
-	@test "$$(uname -s)" = Darwin || { echo 'this build is supported on macOS only'; exit 1; }
 	@test -n "$(PYTHON)" -a -x "$(PYTHON)" || { echo 'missing ESP-IDF Python environment'; exit 1; }
 	@test -n "$(ESP_RISCV_BIN)" -a -x "$(CROSS_COMPILE)gcc" || { echo 'missing Espressif RISC-V toolchain'; exit 1; }
 	@test -n "$(GMAKE)" -a -x "$(GMAKE)" || { echo 'missing GNU make'; exit 1; }
 	@test -f "$(IDF_PATH)/export.sh" || { echo 'missing ESP-IDF at $(IDF_PATH)'; exit 1; }
-	@test -n "$(CONTAINER)" -a -x "$(CONTAINER)" || { echo 'missing the container CLI (Buildroot cannot build on macOS)'; exit 1; }
-	@"$(CONTAINER)" system status >/dev/null 2>&1 || { echo 'container services are not running: container system start'; exit 1; }
-	@"$(CONTAINER)" image inspect "$(BR_IMAGE)" >/dev/null 2>&1 || { echo 'missing the $(BR_IMAGE) image: make container-image'; exit 1; }
-	@"$(PYTHON)" -c 'import serial' || { echo 'missing pyserial in ESP-IDF Python environment'; exit 1; }
+	@test -f "$(BR_DIR)/Makefile" || { echo 'missing Buildroot at $(BR_DIR)'; exit 1; }
+	@"$(PYTHON)" -m serial.tools.list_ports --help >/dev/null 2>&1 || { echo 'missing pyserial in ESP-IDF Python environment'; exit 1; }
 	$(ESPTOOL_CHECK)
-	@$(BR_TOOLS) sh -c 'cd /work && scripts/mkdefconfigs.sh --check'
+	@cd "$(CURDIR)" && scripts/mkdefconfigs.sh --check
 	@git submodule status --recursive
 
 ports:
@@ -201,7 +207,7 @@ build: bootloader opensbi rootfs
 # writes sdkconfig at each build, so it ignores changes to the defaults.
 # Here the defaults have priority, also over "idf.py menuconfig".
 bootloader:
-	@for f in bootloader/sdkconfig.defaults bootloader/sdkconfig.defaults.$(BOARD); do \
+	@for f in bootloader/sdkconfig.defaults bootloader/sdkconfig.defaults.$(HW_BOARD) $(PROFILE_SDKCONFIG); do \
 		if test -f $(BUILD_DIR)/sdkconfig && test $$f -nt $(BUILD_DIR)/sdkconfig; then \
 			echo "$$f changed; regenerating $(BUILD_DIR)/sdkconfig"; \
 			rm -f $(BUILD_DIR)/sdkconfig; \
@@ -245,7 +251,7 @@ opensbi:
 # The defconfigs are made from the common fragment, the root fragment and
 # the fragment of each board.
 defconfigs:
-	@$(BR_TOOLS) sh -c 'cd /work && scripts/mkdefconfigs.sh'
+	@cd "$(CURDIR)" && scripts/mkdefconfigs.sh
 
 # Apply the series in order to a clean extract of the kernel release, in the
 # container at zero fuzz, as Buildroot does.  The macOS patch accepts old
@@ -253,32 +259,29 @@ defconfigs:
 # this test.
 kernel-check: br-volume
 	@$(BR_RUN) sh -c 'set -e; \
-		cd /work/$(BR_DIR); \
-		test -f /br/dl/linux/linux-$(LINUX_VERSION).tar.xz || { \
+		cd $(CURDIR)/$(BR_DIR); \
+		test -f $(CURDIR)/dl/linux/linux-$(LINUX_VERSION).tar.xz || { \
 			$(BR_MAKE) $(BR_DEFCONFIG) >/dev/null; \
 			$(BR_MAKE) linux-source >/dev/null; }; \
-		rm -rf /br/check && mkdir -p /br/check; \
-		tar -xf /br/dl/linux/linux-$(LINUX_VERSION).tar.xz \
-			--strip-components=1 -C /br/check; \
-		cd /br/check; fail=0; \
-		for p in /work/linux/patches/*.patch; do \
+		rm -rf $(CURDIR)/$(BUILD_DIR)/check && mkdir -p $(CURDIR)/$(BUILD_DIR)/check; \
+		tar -xf $(CURDIR)/dl/linux/linux-$(LINUX_VERSION).tar.xz \
+			--strip-components=1 -C $(CURDIR)/$(BUILD_DIR)/check; \
+		cd $(CURDIR)/$(BUILD_DIR)/check; fail=0; \
+		for p in $(CURDIR)/linux/patches/*.patch; do \
 			printf "%-50s " "$$(basename $$p)"; \
 			if patch -p1 -F0 -s -f < "$$p" >/dev/null 2>&1; \
 				then echo applies; else echo FAILS; fail=1; fi; \
-		done; rm -rf /br/check; exit $$fail'
+		done; rm -rf $(CURDIR)/$(BUILD_DIR)/check; exit $$fail'
 
-# Buildroot copies linux/ and applies the patches only when it extracts the
-# kernel, and it ignores changes to the custom config and to the ESP-Hosted
-# sources.  Thus keep a hash of all of them in the volume.  When the hash changes, delete the
-# extracted kernel, headers and ESP-Hosted sources, so Buildroot extracts,
-# patches and configures them again.  Runs in the container, in the Buildroot
-# directory.
-KERNEL_SYNC = sum=$$({ find /work/linux -type f ! -name ._\* | sort | xargs cat; \
-		cat /work/br2-external/board/esp32s31/linux* \
-		/work/br2-external/configs/$(BR_DEFCONFIG) \
-		/work/shared/*.h /work/br2-external/package/esp-hosted-linux/* \
-		/work/external/esp-hosted-linux/host/*.c \
-		/work/external/esp-hosted-linux/host/include/*.h; } | \
+# Buildroot copies linux/ and applies patches only when it extracts the
+# kernel.  Keep a hash of kernel sources, configuration and ESP-Hosted inputs
+# in the native output directory so changes force a clean re-extract.
+KERNEL_SYNC = sum=$$({ find $(CURDIR)/linux -type f ! -name ._\* | sort | xargs cat; \
+		cat $(CURDIR)/br2-external/board/esp32s31/linux* \
+		$(CURDIR)/br2-external/configs/$(BR_DEFCONFIG) \
+		$(CURDIR)/shared/*.h $(CURDIR)/br2-external/package/esp-hosted-linux/* \
+		$(CURDIR)/external/esp-hosted-linux/host/*.c \
+		$(CURDIR)/external/esp-hosted-linux/host/include/*.h; } | \
 		sha256sum | cut -d" " -f1); \
 	stamp=$(BR_O)/.esp32s31-kernel-inputs; \
 	if test -f $(BR_O)/.config && \
@@ -290,7 +293,7 @@ KERNEL_SYNC = sum=$$({ find /work/linux -type f ! -name ._\* | sort | xargs cat;
 	mkdir -p $(BR_O); echo "$$sum" > $$stamp
 
 kernel: br-volume
-	@$(BR_RUN) sh -c 'set -e; cd /work/$(BR_DIR); $(KERNEL_SYNC); \
+	@$(BR_RUN) sh -c 'set -e; cd $(CURDIR)/$(BR_DIR); $(KERNEL_SYNC); \
 		$(BR_MAKE) linux-rebuild all'
 	@$(MAKE) --no-print-directory br-artifacts
 
@@ -298,62 +301,56 @@ kernel: br-volume
 # "make rootfs" do this themselves when linux/, the config or the
 # ESP-Hosted sources change.
 kernel-clean: br-volume
-	@$(BR_RUN) sh -c 'cd /work/$(BR_DIR); $(BR_MAKE) linux-dirclean linux-headers-dirclean'
+	@$(BR_RUN) sh -c 'cd $(CURDIR)/$(BR_DIR); $(BR_MAKE) linux-dirclean linux-headers-dirclean'
 
 # vmlinux has 100 MB of DWARF, so copy it only when GDB needs it.
 kernel-vmlinux: br-volume
-	@$(BR_RUN) sh -c 'cp $(BR_O)/build/linux-$(LINUX_VERSION)/vmlinux /work/$(BUILD_DIR)/'
+	@$(BR_RUN) sh -c 'cp $(BR_O)/build/linux-$(LINUX_VERSION)/vmlinux $(CURDIR)/$(BUILD_DIR)/'
 	@ls -l "$(BUILD_DIR)/vmlinux"
 
 kernel-menuconfig: br-volume
-	@$(BR_RUN) -i -t sh -c 'cd /work/$(BR_DIR) && $(BR_MAKE) linux-menuconfig'
+	@$(BR_RUN) sh -c 'cd $(CURDIR)/$(BR_DIR) && $(BR_MAKE) linux-menuconfig'
 
 kernel-saveconfig: br-volume
-	@$(BR_RUN) sh -c 'cd /work/$(BR_DIR) && $(BR_MAKE) linux-update-defconfig'
+	@$(BR_RUN) sh -c 'cd $(CURDIR)/$(BR_DIR) && $(BR_MAKE) linux-update-defconfig'
 	@git diff --stat -- br2-external/board/esp32s31/linux.config
 
 container-image:
-	@test -n "$(CONTAINER)" || { echo 'missing the container CLI'; exit 1; }
-	@"$(CONTAINER)" build -t "$(BR_IMAGE)" container
+	@echo 'native Ubuntu build: no container image is required'
 
-# Buildroot must not run as root, so give the volume to the user one time.
+# Prepare native output and download directories.  Kept as a dependency name
+# so existing component targets do not need a parallel container code path.
 br-volume:
-	@test -n "$(CONTAINER)" || { echo 'missing the container CLI'; exit 1; }
-	@"$(CONTAINER)" volume inspect "$(BR_VOLUME)" >/dev/null 2>&1 || { \
-		echo "creating the $(BR_VOLUME) volume ($(BR_VOLUME_SIZE))"; \
-		"$(CONTAINER)" volume create -s $(BR_VOLUME_SIZE) "$(BR_VOLUME)"; \
-		"$(CONTAINER)" run --rm --uid 0 --gid 0 -v $(BR_VOLUME):/br "$(BR_IMAGE)" \
-			chown -R $(shell id -u):$(shell id -g) /br; }
+	@mkdir -p "$(BR_O)" "$(CURDIR)/dl"
 
 # The defconfig in git is the reference.  Each build applies it again.
 rootfs: br-volume
 	@$(BR_RUN) sh -c 'set -e; \
-		cd /work/$(BR_DIR); \
+		cd $(CURDIR)/$(BR_DIR); \
 		$(BR_MAKE) $(BR_DEFCONFIG); \
 		$(KERNEL_SYNC); \
 		$(BR_MAKE)'
 	@$(MAKE) --no-print-directory br-artifacts
 
-# Copy the kernel and its manifest from the volume for flashing, next to the
-# loader and OpenSBI binaries: also the squashfs root of a board without a
-# disk, and the disk images of a board with a disk.
+# Copy the kernel and its manifest from the native output for flashing, next
+# to the loader and OpenSBI binaries; also copy rootfs and disk images.
 br-artifacts:
 	@$(BR_RUN) sh -c 'set -e; \
-		mkdir -p /work/$(BR_OUT) /work/$(BUILD_DIR); \
-		test $$(wc -c < $(BR_O)/images/Image) -le $$(( $(LINUX_SIZE) - 12 )) || \
-			{ echo "Image and its manifest are larger than the $(LINUX_SIZE) partition"; exit 1; }; \
-		cp $(BR_O)/images/Image $(BR_O)/images/linux.size /work/$(BUILD_DIR)/; \
+		mkdir -p $(CURDIR)/$(BR_OUT) $(CURDIR)/$(BUILD_DIR); \
+		test $$(wc -c < $(BR_O)/images/Image) -le $$(( $(LINUX_SIZE) - 4096 )) || \
+			{ echo "Image exceeds the manifest-safe kernel partition area"; exit 1; }; \
+		cp $(BR_O)/images/Image $(BR_O)/images/linux.size $(CURDIR)/$(BUILD_DIR)/; \
 		if test -f $(BR_O)/images/rootfs.squashfs; then \
 			test $$(wc -c < $(BR_O)/images/rootfs.squashfs) -le $$(( $(ROOT_SIZE) )) || \
 				{ echo "rootfs.squashfs is larger than the $(ROOT_SIZE) partition"; exit 1; }; \
-			cp $(BR_O)/images/rootfs.squashfs /work/$(BUILD_DIR)/; \
+			cp $(BR_O)/images/rootfs.squashfs $(CURDIR)/$(BUILD_DIR)/; \
 		fi; \
 		for f in rootfs.ext2 sdcard.img; do \
-			if test -f $(BR_O)/images/$$f; then cp $(BR_O)/images/$$f /work/$(BR_OUT)/; fi; \
+			if test -f $(BR_O)/images/$$f; then cp $(BR_O)/images/$$f $(CURDIR)/$(BR_OUT)/; fi; \
 		done'
 
 rootfs-menuconfig: br-volume
-	@$(BR_RUN) -i -t sh -c 'cd /work/$(BR_DIR) && $(BR_MAKE) $(BR_DEFCONFIG) && $(BR_MAKE) menuconfig'
+	@$(BR_RUN) sh -c 'cd $(CURDIR)/$(BR_DIR) && $(BR_MAKE) $(BR_DEFCONFIG) && $(BR_MAKE) menuconfig'
 
 sdcard: rootfs
 	@test -f "$(BR_OUT)/sdcard.img" || { \
@@ -437,16 +434,28 @@ FLASH_IMAGES = \
 	$(if $(ROOT_OFFSET),$(ROOT_OFFSET) $(BUILD_DIR)/rootfs.squashfs)
 
 flash: build
-	@test -n "$(FLASH_PORT)" || { echo 'set FLASH_PORT=/dev/cu.<flash-port>'; exit 1; }
+	@$(MAKE) --no-print-directory flash-only
+
+validate-images:
+	@python3 -I scripts/validate-flash-images.py \
+		--image "$(BUILD_DIR)/Image" \
+		--manifest "$(BUILD_DIR)/linux.size" \
+		--linux-partition-size "$(LINUX_SIZE)" $(if $(ROOT_OFFSET),--rootfs "$(BUILD_DIR)/rootfs.squashfs" --rootfs-size "$(ROOT_SIZE)")
+
+# Low-level esptool entry point.  Board-side callers must hold the shared
+# exclusive lease and manage the UART daemon; this target never erases data.
+flash-only: validate-images
+	@test -n "$(FLASH_PORT)" || { echo 'set FLASH_PORT=/dev/ttyUSB0'; exit 1; }
 	$(ESPTOOL_CHECK)
-	@$(ESPTOOL) --chip esp32s31 -p "$(FLASH_PORT)" -b 921600 \
-		--before default-reset --after hard-reset write-flash $(FLASH_IMAGES)
+	@$(foreach f,$(filter $(BUILD_DIR)/%,$(FLASH_IMAGES)),test -s "$(f)" || { echo 'missing $(f)'; exit 1; };)
+	@$(ESPTOOL) --chip esp32s31 -p "$(FLASH_PORT)" -b $(FLASH_BAUD) \
+		--before default-reset --after $(FLASH_AFTER) write-flash $(FLASH_IMAGES)
 
 flash-args:
 	@printf '%s %s\n' $(FLASH_IMAGES)
 
 monitor:
-	@test -n "$(SERIAL_PORT)" || { echo 'set SERIAL_PORT=/dev/cu.<external-uart>'; exit 1; }
+	@test -n "$(SERIAL_PORT)" || { echo 'set SERIAL_PORT=/dev/ttyUSB0'; exit 1; }
 	@"$(PYTHON)" scripts/reset-monitor.py --port "$(SERIAL_PORT)" --baud "$(BAUD)" \
 		$(if $(RESET_PORT),--reset-port "$(RESET_PORT)",) --log-dir "$(LOG_DIR)" \
 		--timeout "$(BOOT_TIMEOUT)" --success-pattern 'ESP32-S31 Linux / Buildroot' --interactive
@@ -463,6 +472,6 @@ openocd:
 	exec "$$openocd_bin" -c 'set ESP_RTOS none' -f "$(OPENOCD_CFG)" \
 		-l "$(LOG_DIR)/$$(date +%Y%m%d-%H%M%S)-openocd.log"
 
-# Buildroot's output is in the volume: "container volume rm $(BR_VOLUME)".
+# Native Buildroot output is in build/BOARD.
 clean:
 	@rm -rf "$(BUILD_DIR)"

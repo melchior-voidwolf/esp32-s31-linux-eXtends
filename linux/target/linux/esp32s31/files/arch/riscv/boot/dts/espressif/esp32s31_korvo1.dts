@@ -1,0 +1,152 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * ESP32-S31-Korvo-1: 800x480 RGB panel, microSD slot, USB 2.0 host port
+ * and a WS2812 RGB LED.
+ * Author: Marco Müller <hello@annoyedmilk.ch>
+ */
+/dts-v1/;
+#include "esp32s31.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	model = "Espressif ESP32-S31-Korvo-1";
+	compatible = "esp,esp32s31-korvo-1", "esp,esp32s31";
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		/*
+		 * The loader DMA reads this buffer also after the handoff.
+		 * OpenSBI makes this range uncached with two PMA entries, so
+		 * it goes to the end of PSRAM.
+		 */
+		fb_region: framebuffer@50f40000 {
+			reg = <0x50f40000 0xc0000>;
+			no-map;
+		};
+	};
+
+	/* GPIO39 low switches the power of the microSD slot on. */
+	sd_vdd: regulator-sd {
+		compatible = "regulator-fixed";
+		regulator-name = "sd-vdd";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&pinctrl 39 GPIO_ACTIVE_LOW>;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+
+		/*
+		 * The loader starts the 800x480 RGB panel of the Korvo-1.  The
+		 * LCD_CAM DMA then reads an RGB565 buffer at the top of PSRAM,
+		 * so Linux only describes it.  fb_region reserves the memory.
+		 * of_platform makes this device for a simple-framebuffer under
+		 * /chosen.  If the loader gives GPIO33/34 to USB Serial/JTAG,
+		 * it does not start the display: fb0 exists but shows nothing.
+		 */
+		framebuffer {
+			compatible = "simple-framebuffer";
+			width = <800>;
+			height = <480>;
+			stride = <(800 * 2)>;
+			format = "r5g6b5";
+			memory-region = <&fb_region>;
+		};
+	};
+};
+
+/*
+ * The slot has no card-detect or write-protect contact, and the root is on
+ * the card.
+ */
+&sdmmc0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&sd_cfg>;
+	vmmc-supply = <&sd_vdd>;
+	non-removable;
+	status = "okay";
+};
+
+/* The Type-A port: host only, with a TPS2051C switch for VBUS. */
+&usb_phy { status = "okay"; };
+
+&usb0 {
+	dr_mode = "host";
+	disable-over-current;
+	status = "okay";
+};
+
+/* WS2812 RGB LED on GPIO37. */
+&rgb_led {
+	pinctrl-names = "default";
+	pinctrl-0 = <&led_cfg>;
+	status = "okay";
+};
+
+/*
+ * The loader drives the LCD (GPIO8-19, 33-36, 38, 40, 43-45).  The card pins
+ * (GPIO20-25) and the LED (GPIO37) belong to drivers.  With the flash, GPIO41
+ * and UART0, Linux must not use them as GPIOs.  GPIO39 is the card power.
+ */
+&pinctrl {
+	gpio-reserved-ranges = <8 31>, <40 2>, <43 3>, <58 2>;
+
+	/* The SD host on its IO MUX pins, function 4 */
+	sd_cfg: sd-cfg {
+		sd-clk-pins {
+			pinmux = <ESP32S31_IOMUX(24, 4)>;
+			bias-disable;
+			input-enable;
+			drive-strength = <40>;
+		};
+
+		sd-cmd-data-pins {
+			pinmux = <ESP32S31_IOMUX(20, 4)>,	/* D0 */
+				 <ESP32S31_IOMUX(21, 4)>,	/* D1 */
+				 <ESP32S31_IOMUX(22, 4)>,	/* D2 */
+				 <ESP32S31_IOMUX(23, 4)>,	/* D3 */
+				 <ESP32S31_IOMUX(25, 4)>;	/* CMD */
+			bias-pull-up;
+			input-enable;
+			drive-strength = <40>;
+		};
+	};
+
+	led_cfg: led-cfg {
+		led-pins {
+			pinmux = <ESP32S31_MATRIX_OUT(37, ESP32S31_SIG_RMT_OUT0)>;
+		};
+	};
+
+	i2c0_cfg: i2c0-cfg {
+		i2c0-pins {
+			pinmux = <ESP32S31_MATRIX_INOUT(0, ESP32S31_SIG_I2C0_SDA)>,
+				 <ESP32S31_MATRIX_INOUT(1, ESP32S31_SIG_I2C0_SCL)>;
+			bias-pull-up;
+			drive-open-drain;
+		};
+	};
+};
+
+/*
+ * The board I2C bus: the ES8389 codec at 0x10 and the GT1151 touch
+ * controller of the LCD at 0x14.  The touch INT and reset lines are not
+ * connected, so the driver polls the controller.
+ */
+&i2c0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c0_cfg>;
+	clock-frequency = <400000>;
+	status = "okay";
+
+	touchscreen@14 {
+		compatible = "goodix,gt1151";
+		reg = <0x14>;
+		touchscreen-size-x = <800>;
+		touchscreen-size-y = <480>;
+	};
+};

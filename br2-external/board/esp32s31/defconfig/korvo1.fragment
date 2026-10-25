@@ -7,7 +7,6 @@ BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_ESP32S31_PATH)/board/esp32s31/rootfs-overlay 
 BR2_ROOTFS_POST_SCRIPT_ARGS="tty1"
 # The mouse on the panel console.
 BR2_PACKAGE_GPM=y
-<<<<<<< HEAD
 # Links needs OpenSSL and the CA certificates for HTTPS after the board
 # clock is set.
 BR2_PACKAGE_LINKS_GRAPHICS=y
@@ -67,18 +66,9 @@ BR2_PACKAGE_XAPP_XCLOCK=y
 BR2_PACKAGE_XAPP_ICO=y
 BR2_PACKAGE_XAPP_XDBEDIZZY=y
 BR2_PACKAGE_XAPP_XEYES=y
-=======
-# A desktop for the panel and a USB keyboard (the US keymap of the kernel):
-# tmux from diskroot.fragment with a status bar, and a web browser and a
-# chat client for it.
-BR2_PACKAGE_LYNX=y
-BR2_PACKAGE_IRSSI=y
-# evtest for the touch controller.  BusyBox has i2cdetect, i2cget and
-# i2ctransfer.
-BR2_PACKAGE_EVTEST=y
->>>>>>> origin/main
 # A web browser and a chat client for the tmux desktop of the upstream
 # v0.7 line; evtest for the touch controller (hardware I2C now).  BusyBox
 # has i2cdetect, i2cget and i2ctransfer.
 BR2_PACKAGE_LYNX=y
 BR2_PACKAGE_IRSSI=y
+BR2_PACKAGE_EVTEST=y

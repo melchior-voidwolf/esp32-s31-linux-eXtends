@@ -1,0 +1,49 @@
+--- a/sound/soc/codecs/es8389.c
++++ b/sound/soc/codecs/es8389.c
+@@ -34,6 +34,8 @@
+ 	struct clk *mclk;
+ 	struct regulator_bulk_data core_supply[2];
+ 	unsigned int sysclk;
++  unsigned int tdm_slots;
++  unsigned int tdm_slot_width;
+ 	int mastermode;
+
+ 	u8 hpfl;
+@@ -647,6 +649,8 @@
+ 	struct snd_soc_component *component = dai->component;
+ 	struct es8389_private *es8389 = snd_soc_component_get_drvdata(component);
+
++  es8389->tdm_slots = slots;
++  es8389->tdm_slot_width = slot_width;
+ 	regmap_update_bits(es8389->regmap, ES8389_PTDM_SLOT,
+ 				ES8389_TDM_SLOT, (slots << ES8389_TDM_SHIFT));
+ 	regmap_update_bits(es8389->regmap, ES8389_DAC_RAMP,
+@@ -737,7 +741,12 @@
+ 	if (es8389->mclk_src == ES8389_SCLK_PIN) {
+ 		regmap_update_bits(es8389->regmap, ES8389_MASTER_CLK,
+ 					ES8389_MCLK_MASK, ES8389_MCLK_FROM_SCLK);
+-		es8389->sysclk = params_channels(params) * params_width(params) * params_rate(params);
++  	if (es8389->tdm_slots && es8389->tdm_slot_width)
++  		es8389->sysclk = es8389->tdm_slots * es8389->tdm_slot_width *
++  			params_rate(params);
++  	else
++  		es8389->sysclk = params_channels(params) * params_width(params) *
++  			params_rate(params);
+ 	}
+
+ 	regmap_read(es8389->regmap, ES8389_DMIC_EN, &regv);
+--- a/Documentation/devicetree/bindings/sound/everest,es8389.yaml
++++ b/Documentation/devicetree/bindings/sound/everest,es8389.yaml
+@@ -27,6 +27,12 @@
+     items:
+       - const: mclk
+
++  everest,mclk-src:
++    description: Internal master clock source. 0 means the MCLK pin, 1 means SCLK.
++    type: uint32
++    enum: [0, 1]
++    default: 0
++
+   port:
+     $ref: audio-graph-port.yaml#
+     unevaluatedProperties: false

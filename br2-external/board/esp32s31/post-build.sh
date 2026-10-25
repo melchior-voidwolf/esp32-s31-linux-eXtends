@@ -2,6 +2,11 @@
 # SPDX-License-Identifier: MIT
 set -eu
 
+headless_flash=0
+for arg in "$@"; do
+	if [ "$arg" = headless-flash ]; then headless_flash=1; fi
+done
+
 # Log in on the serial console automatically.  SSH takes a key only.
 grep -qF 'ttyS0::respawn:/sbin/getty -L -n -l /sbin/serial-autologin ttyS0 115200' "$1/etc/inittab"
 test -x "$1/sbin/serial-autologin"
@@ -13,6 +18,7 @@ test -x "$1/sbin/serial-autologin"
 target=$1
 shift
 for vt in "$@"; do
+	if [ "$vt" = headless-flash ]; then continue; fi
 	line="$vt::respawn:/sbin/getty -n -l /sbin/serial-autologin $vt 38400 linux"
 	grep -qF "$line" "$target/etc/inittab" || printf '%s\n' "$line" >> "$target/etc/inittab"
 done
@@ -22,7 +28,10 @@ set -- "$target"
 # kernel has no module support, so S11modules has nothing to load.
 # Dropbear stays installed but does not autostart: on an 11 MiB machine
 # every idle daemon is working set, and the serial console is the console.
-rm -f "$1/etc/init.d/S90httpd" "$1/etc/init.d/S11modules" "$1/etc/init.d/S50dropbear"
+rm -f "$1/etc/init.d/S90httpd" "$1/etc/init.d/S11modules"
+if [ -f "$1/etc/init.d/S50dropbear" ]; then
+	mv "$1/etc/init.d/S50dropbear" "$1/etc/init.d/dropbear"
+fi
 
 # bluetoothd does not autostart either (it idles at ~1 MiB RSS on a machine
 # with 11 MiB).  The script stays runnable without its S-prefixed name:
@@ -71,8 +80,10 @@ if ! grep -q bluetooth-start "$1/usr/bin/bluetoothctl"; then
 fi
 
 # Buildroot copies the overlays with go=rX.  local-overlay/ can give this file
-# a network key.
-chmod 600 "$1/etc/wpa_supplicant.conf"
+# a network key, but the headless profile deliberately has no such file.
+if [ -f "$1/etc/wpa_supplicant.conf" ]; then
+	chmod 600 "$1/etc/wpa_supplicant.conf"
+fi
 
 # The boot scripts run as /bin/sh, BusyBox ash, which needs much less memory
 # than bash.  The interactive shell of root is bash, where the image has it.
@@ -84,4 +95,20 @@ fi
 # compiles each script itself.
 if [ -x "$1/sbin/overlay-init" ]; then
 	rm -f "$1/usr/bin/luac"
+fi
+
+# Korvo-1 headless flash: no SD access, background diagnostics, automatic
+# Wi-Fi, swap or LED/audio policy.  Zram remains manually runnable; the first
+# 4 MiB profile has no WPA userspace, so no Wi-Fi startup script is installed.
+if [ "$headless_flash" = 1 ]; then
+	rm -f "$1/etc/init.d/S10sdcard.sh" "$1/etc/init.d/S70diag" \
+		"$1/etc/init.d/S02ledstatus" "$1/etc/init.d/S98ledready" \
+		"$1/etc/init.d/S40wifi" "$1/root/mw.sh"
+	if [ -f "$1/etc/init.d/S05swap.sh" ]; then
+		mv "$1/etc/init.d/S05swap.sh" "$1/etc/init.d/swap.sh"
+	fi
+	for script in "$1/etc/init.d/S"*alsa*; do
+		if [ -e "$script" ]; then rm -f "$script"; fi
+	done
+	rmdir "$1/mnt/sd" 2>/dev/null || true
 fi

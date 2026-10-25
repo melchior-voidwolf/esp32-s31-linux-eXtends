@@ -1,0 +1,33 @@
+#!/bin/sh
+# Start DHCP only on an already-present wired interface; no polling daemon.
+set -u
+
+start_net()
+{
+	found=0
+	for path in /sys/class/net/eth*; do
+		[ -e "$path" ] || continue
+		found=1
+		dev=${path##*/}
+		ip link set "$dev" up
+		udhcpc -i "$dev" -b -S -p "/var/run/udhcpc.$dev.pid"
+	done
+	[ "$found" = 1 ] || echo "usbnet: no wired interface yet; restart after plugging it"
+}
+
+stop_net()
+{
+	for pidfile in /var/run/udhcpc.eth*.pid; do
+		[ -r "$pidfile" ] || continue
+		kill "$(cat "$pidfile")" 2>/dev/null || true
+		rm -f "$pidfile"
+	done
+}
+
+case "${1:-}" in
+start) start_net ;;
+stop) stop_net ;;
+restart) stop_net; start_net ;;
+*) echo "usage: $0 start|stop|restart" >&2; exit 2 ;;
+esac
+exit 0

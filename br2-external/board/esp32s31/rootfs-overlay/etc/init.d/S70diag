@@ -4,7 +4,7 @@
 # and once time an 8MB read of the root partition.  Data lands on the FAT
 # partition, so it survives a wedged console — pull the card and read
 # diag.txt on the host.  NODIAG on p1 disables it.
-[ -d /mnt/sd ] || exit 0
+mountpoint -q /mnt/sd || exit 0
 [ -f /mnt/sd/NODIAG ] && exit 0
 
 LOG=/mnt/sd/diag.txt

@@ -10,13 +10,16 @@
 set -eu
 
 cd "$(dirname "$0")/.."
-# The images of a local build contain the files of local-overlay/.
-if [ -n "$(ls -A local-overlay | grep -vx .empty)" ]; then
-	echo "local-overlay/ has files, which can be keys: do not release this build" >&2
-	exit 1
-fi
 version=${1:?usage: $0 VERSION BOARD}
 board=${2:?usage: $0 VERSION BOARD}
+case $board in
+korvo1flash|korvo1flashf) ;;
+*)
+	if [ -n "$(ls -A local-overlay | grep -vx .empty)" ]; then
+		echo "local-overlay/ has files, which can be keys: do not release this build" >&2
+		exit 1
+	fi ;;
+esac
 name=esp32s31-linux-$version-$board
 out=build/release
 stage=$out/$name-flash
@@ -43,13 +46,14 @@ while [ $# -ge 2 ]; do
 	shift 2
 done
 echo "$flash_args" | sed 's/^ //' > "$stage/flash_args"
+make -s validate-images BOARD="$board"
 
 # One image for offset 0, for the simplest flash command.
 (cd "$stage" && $esptool --chip esp32s31 merge-bin -o flash.bin $(cat flash_args))
 
 disk=sdcard
 case $board in
-korvo1)
+korvo1|korvo1f)
 	title="the ESP32-S31-Korvo-1 (with the ESP32-S31-WROOM-3-N16R16V)"
 	usage="Write the card image to a microSD card (it erases the card), for example
 with balenaEtcher, or with dd on Linux or macOS:
@@ -65,12 +69,20 @@ with balenaEtcher, or with dd on Linux or macOS:
 
 The board mounts its root from the stick with this image (disk signature
 0x45533331), so other USB disks can be connected when it starts." ;;
-esp32s31)
+esp32s31|esp32s31f)
 	title="the ESP32-S31-WROOM-3-N16R16V module alone (UART only)"
 	usage="The full system is in the flash.  The root is writable, and the files
-stay after a reboot and after a new flash.bin.  A data partition without UBI
-(a new board, or a board from v0.4.0) is erased and formatted at the first
-boot.  To go back to the image, run flash_erase /dev/mtd1 0 0 and reboot." ;;
+stay after a reboot.  An empty UBI data partition is initialized by UBI; an
+attach failure now falls back to read-only and never auto-erases data.  Only
+run flash_erase /dev/mtd1 0 0 as an explicit factory reset." ;;
+korvo1flash|korvo1flashf)
+	title="the ESP32-S31-Korvo-1 (headless flash profile)"
+	usage="The full Buildroot system is in SPI flash: no X and no SD.  The first
+small profile uses wired Ethernet, on-demand Bluetooth and audio-ready support;
+it has no WPA userspace and no Matter/OTBR.  Both @flash_args and the merged
+flash.bin stop at the end of the actual rootfs and leave the UBIFS data
+partition untouched.  UBI attach failure falls back to read-only without
+erasing data; only an explicit data erase is a factory reset." ;;
 esac
 
 cat > "$stage/FLASH.txt" <<TXT

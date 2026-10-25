@@ -5,13 +5,15 @@
 # complete tree.
 set -eu
 
-# ca-certificates installs each certificate twice: as a file with a link in
-# /etc/ssl/certs, and in the bundle, which curl reads.  Keep the bundle, and
-# make it the default file of OpenSSL for the other programs.  The bundle is
-# made from the single files at each build, so they must stay in target/.
+# ca-certificates is optional (the small headless profile omits it).  When
+# present, keep the bundle and remove duplicate per-certificate links.
 rm -rf "$1/usr/share/ca-certificates"
-find "$1/etc/ssl/certs" -type l -delete
-ln -sf certs/ca-certificates.crt "$1/etc/ssl/cert.pem"
+if [ -d "$1/etc/ssl/certs" ]; then
+	find "$1/etc/ssl/certs" -type l -delete
+fi
+if [ -f "$1/etc/ssl/certs/ca-certificates.crt" ]; then
+	ln -sf certs/ca-certificates.crt "$1/etc/ssl/cert.pem"
+fi
 
 # Packages install libraries that nothing here uses: glib2 five next to
 # libglib (and its tools), libnl, ncurses and readline their extra parts,
@@ -24,6 +26,7 @@ cd "$1"
 rm -f usr/bin/gapplication usr/bin/gdbus usr/bin/gi-compile-repository \
 	usr/bin/gi-decompile-typelib usr/bin/gi-inspect-typelib usr/bin/gio \
 	usr/bin/gio-querymodules usr/bin/gresource usr/bin/gsettings \
+	usr/bin/pcre2test usr/bin/pcre2grep usr/bin/dbus-test-tool usr/bin/aserver \
 	usr/libexec/gio-launch-desktop
 rm -rf usr/lib/gio usr/share/glib-2.0
 for lib in libgirepository-2.0 libgio-2.0 libgobject-2.0 libgmodule-2.0 \
